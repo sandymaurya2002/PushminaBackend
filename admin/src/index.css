@@ -1,0 +1,144 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    border-color: theme('colors.line');
+  }
+
+  html {
+    scrollbar-gutter: stable;
+  }
+
+  body {
+    @apply bg-ivory text-charcoal font-sans antialiased;
+    font-feature-settings: 'kern', 'liga', 'calt';
+  }
+
+  h1,
+  h2,
+  h3 {
+    @apply font-serif font-normal;
+  }
+
+  /* One consistent focus treatment. Never removed. */
+  :focus-visible {
+    outline: 2px solid theme('colors.gold');
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  ::selection {
+    @apply bg-gold-pale text-ink;
+  }
+}
+
+@layer components {
+  .eyebrow {
+    @apply text-[0.6875rem] uppercase tracking-[0.16em] font-medium;
+  }
+
+  .card {
+    @apply bg-white border border-line;
+  }
+
+  .input {
+    @apply h-10 w-full border border-line-strong bg-white px-3 text-sm text-charcoal
+           placeholder:text-taupe transition-colors
+           hover:border-taupe focus:border-charcoal focus:outline-none
+           disabled:cursor-not-allowed disabled:opacity-50
+           aria-[invalid=true]:border-burgundy;
+  }
+
+  .label {
+    @apply eyebrow mb-1.5 block text-taupe;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 whitespace-nowrap
+           text-[0.75rem] uppercase tracking-[0.12em] font-medium
+           transition-all duration-300 ease-luxe
+           disabled:pointer-events-none disabled:opacity-45;
+  }
+
+  .btn-primary {
+    @apply btn bg-charcoal text-ivory hover:bg-ink h-10 px-5;
+  }
+
+  .btn-outline {
+    @apply btn border border-charcoal/25 text-charcoal hover:border-charcoal hover:bg-charcoal hover:text-ivory h-10 px-5;
+  }
+
+  .btn-ghost {
+    @apply btn text-charcoal hover:bg-charcoal/5 h-10 px-4;
+  }
+
+  .btn-danger {
+    @apply btn bg-burgundy text-ivory hover:brightness-110 h-10 px-5;
+  }
+
+  .btn-sm {
+    @apply h-8 px-3 text-[0.6875rem];
+  }
+
+  .th {
+    @apply eyebrow text-taupe text-left font-medium py-3 px-4 border-b border-line bg-cream/40;
+  }
+
+  .td {
+    @apply py-3 px-4 border-b border-line text-sm align-middle;
+  }
+
+  .chip {
+    @apply inline-flex items-center px-2 py-0.5 text-[0.625rem] uppercase tracking-[0.12em] border;
+  }
+}
+
+/* Loading shimmer, matching the storefront's skeleton treatment. */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background-color: theme('colors.ivory-deep');
+}
+
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background-image: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, white 62%, transparent),
+    transparent
+  );
+  animation: shimmer 1.6s infinite;
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+  .skeleton::after {
+    display: none;
+  }
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: theme('colors.line-strong');
+  border-radius: 4px;
+}
