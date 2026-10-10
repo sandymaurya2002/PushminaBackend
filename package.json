@@ -10,7 +10,8 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc -p tsconfig.json",
+    "postinstall": "prisma generate",
+    "build": "prisma generate && tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --ext .ts",
@@ -30,6 +31,7 @@
   },
   "dependencies": {
     "@prisma/client": "^6.1.0",
+    "prisma": "^6.1.0",
     "bcryptjs": "^2.4.3",
     "compression": "^1.7.5",
     "cookie-parser": "^1.4.7",
@@ -61,7 +63,6 @@
     "@types/nodemailer": "^6.4.17",
     "pg": "^8.13.1",
     "pino-pretty": "^13.0.0",
-    "prisma": "^6.1.0",
     "tsx": "^4.19.2",
     "typescript": "^5.9.2"
   }
