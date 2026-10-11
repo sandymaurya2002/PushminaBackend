@@ -11,12 +11,23 @@ async function bootstrap(): Promise<void> {
 
   const app = createApp()
 
-  const server = app.listen(env.PORT, () => {
-    logger.info(`Pushmina API listening on http://localhost:${env.PORT}`)
-    logger.info(`   Health   → http://localhost:${env.PORT}/health`)
-    logger.info(`   API root → http://localhost:${env.PORT}/api/v1`)
-    logger.info(`   Docs     → http://localhost:${env.PORT}/api/v1/docs`)
-  })
+  const onListening = () => {
+    const where =
+      typeof env.PORT === 'number' ? `http://localhost:${env.PORT}` : env.PORT
+    logger.info(`Pushmina API listening on ${where}`)
+    if (typeof env.PORT === 'number') {
+      logger.info(`   Health   → http://localhost:${env.PORT}/health`)
+      logger.info(`   API root → http://localhost:${env.PORT}/api/v1`)
+      logger.info(`   Docs     → http://localhost:${env.PORT}/api/v1/docs`)
+    }
+  }
+
+  // Bind every interface so Azure's proxy can reach the process.
+  // A named pipe (Windows iisnode) must be listened on with no host.
+  const server =
+    typeof env.PORT === 'number'
+      ? app.listen(env.PORT, '0.0.0.0', onListening)
+      : app.listen(env.PORT, onListening)
 
   startScheduler()
 

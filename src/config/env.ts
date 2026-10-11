@@ -1,4 +1,5 @@
 import 'dotenv/config'
+import path from 'node:path'
 import { z } from 'zod'
 
 /**
@@ -13,9 +14,24 @@ const booleanish = z
   .union([z.boolean(), z.string()])
   .transform((value) => value === true || value === 'true' || value === '1')
 
+/**
+ * Azure App Service on Windows (iisnode) sets PORT to a named pipe
+ * (`\\.\pipe\...`). Everywhere else it is a TCP port number.
+ */
+const listenTarget = z
+  .string()
+  .optional()
+  .transform((value) => {
+    const trimmed = value?.trim() ?? ''
+    if (!trimmed) return 5000
+    if (/^\d+$/.test(trimmed)) return Number(trimmed)
+    return trimmed
+  })
+  .pipe(z.union([z.number().int().min(1).max(65535), z.string().min(1)]))
+
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-  PORT: z.coerce.number().int().positive().default(5000),
+  PORT: listenTarget,
   API_BASE_URL: z.string().url().default('http://localhost:5000'),
   STOREFRONT_URL: z.string().url().default('http://localhost:3000'),
 
@@ -39,7 +55,19 @@ const schema = z.object({
     ),
 
   STORAGE_DRIVER: z.enum(['local', 's3', 'cloudinary']).default('local'),
-  UPLOAD_DIR: z.string().default('uploads'),
+  // Azure wwwroot is read-only when the app runs from a zip package.
+  // /home (Linux) and D:\home (Windows) stay writable.
+  UPLOAD_DIR: z
+    .string()
+    .optional()
+    .transform((value) => {
+      const trimmed = value?.trim() ?? ''
+      if (trimmed) return trimmed
+      if (process.env.WEBSITE_SITE_NAME && process.env.HOME) {
+        return path.join(process.env.HOME, 'data', 'uploads')
+      }
+      return 'uploads'
+    }),
   MAX_UPLOAD_MB: z.coerce.number().int().positive().default(10),
 
   PAYMENT_PROVIDER: z.enum(['razorpay', 'mock']).default('razorpay'),
