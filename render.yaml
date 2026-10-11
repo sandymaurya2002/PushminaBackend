@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: pushmina-backend
+    runtime: node
+    buildCommand: npm install --include=dev && npm run build && npm prune --omit=dev
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production

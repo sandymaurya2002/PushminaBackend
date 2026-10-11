@@ -28,6 +28,7 @@ jobs:
           npm install
           npm run build --if-present
           npm run test --if-present
+          npm prune --omit=dev
           # CI is Linux. Azure Windows still needs the prebuilt sharp binary.
           npm install --no-save --force @img/sharp-win32-x64
 
