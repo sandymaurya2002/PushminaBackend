@@ -22,7 +22,8 @@ async function bootstrap(): Promise<void> {
     }
   }
 
-  // Bind every interface so Azure's proxy can reach the process.
+  // Render and Azure reach the process through a proxy, so a numeric port
+  // must listen on every interface. process.env.PORT is read in config/env.
   // A named pipe (Windows iisnode) must be listened on with no host.
   const server =
     typeof env.PORT === 'number'

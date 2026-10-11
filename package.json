@@ -5,7 +5,7 @@
   "description": "Pushmina — e-commerce backend API, admin API and CMS. Node + TypeScript + PostgreSQL.",
   "license": "UNLICENSED",
   "engines": {
-    "node": ">=18.18.0"
+    "node": "24.x"
   },
   "main": "dist/server.js",
   "scripts": {
