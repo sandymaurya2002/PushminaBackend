@@ -1,0 +1,6 @@
+# Copy to .dev.vars for `wrangler dev`. Overrides the vars in wrangler.jsonc locally only.
+FRONTEND_ORIGIN=http://localhost:3000
+ADMIN_ORIGIN=http://localhost:5173
+ENABLE_COD_ORDERS=false
+# Only needed when testing the Node gateway locally; must match its GATEWAY_SECRET.
+GATEWAY_SECRET=

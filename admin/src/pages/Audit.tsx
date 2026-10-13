@@ -24,20 +24,18 @@ interface AuditRow {
 }
 
 const ENTITY_TYPES = [
-  'Product',
-  'Order',
-  'Payment',
-  'Refund',
-  'Customer',
-  'Colour',
-  'Category',
-  'Collection',
-  'BlogPost',
-  'Page',
-  'Banner',
-  'Coupon',
-  'AdminUser',
-  'SiteSetting',
+  'product',
+  'order',
+  'customer',
+  'category',
+  'collection',
+  'color',
+  'size',
+  'material',
+  'pattern',
+  'media',
+  'admin',
+  'user',
 ]
 
 export function Audit() {

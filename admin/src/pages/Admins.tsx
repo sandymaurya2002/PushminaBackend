@@ -35,6 +35,8 @@ interface Role {
   slug: string
   description: string | null
   isSystem: boolean
+  /** Roles are fixed in code on the Cloudflare API; permissions can be viewed, not edited. */
+  editable?: boolean
   adminCount: number
   permissions: string[]
 }
@@ -312,7 +314,7 @@ export function Admins() {
                     onClick={() => setEditingRole({ ...role })}
                     className="btn-outline btn-sm"
                   >
-                    Edit permissions
+                    {role.editable ? 'Edit permissions' : 'View permissions'}
                   </button>
                 )}
               </div>
@@ -411,26 +413,35 @@ export function Admins() {
         footer={
           <>
             <button type="button" onClick={() => setEditingRole(null)} className="btn-ghost">
-              Cancel
+              {editingRole?.editable ? 'Cancel' : 'Close'}
             </button>
-            <button
-              type="button"
-              onClick={() => editingRole && savePermissions.mutate(editingRole)}
-              disabled={savePermissions.isPending}
-              className="btn-primary"
-            >
-              {savePermissions.isPending && <Spinner />}
-              Save permissions
-            </button>
+            {editingRole?.editable && (
+              <button
+                type="button"
+                onClick={() => editingRole && savePermissions.mutate(editingRole)}
+                disabled={savePermissions.isPending}
+                className="btn-primary"
+              >
+                {savePermissions.isPending && <Spinner />}
+                Save permissions
+              </button>
+            )}
           </>
         }
       >
         {editingRole && (
           <div className="space-y-5">
+            {!editingRole.editable && (
+              <p className="text-sm text-mocha">
+                Roles are fixed in this version. To change what someone can do, assign them a
+                different role.
+              </p>
+            )}
             {Object.entries(permissionGroups).map(([group, permissions]) => (
               <div key={group}>
                 <div className="mb-2 flex items-center justify-between">
                   <p className="eyebrow text-taupe">{group}</p>
+                  {editingRole.editable && (
                   <button
                     type="button"
                     onClick={() => {
@@ -447,6 +458,7 @@ export function Admins() {
                   >
                     Toggle all
                   </button>
+                  )}
                 </div>
 
                 <div className="grid gap-1.5 border border-line p-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -458,6 +470,7 @@ export function Admins() {
                       <input
                         type="checkbox"
                         checked={editingRole.permissions.includes(permission.key)}
+                        disabled={!editingRole.editable}
                         onChange={(event) =>
                           setEditingRole({
                             ...editingRole,

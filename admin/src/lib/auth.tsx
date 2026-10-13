@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import { api, getAccessToken, setAccessToken } from './api'
+import { api, getAccessToken, setAccessToken, setRefreshToken } from './api'
 
 export interface AdminUser {
   id: string
@@ -63,14 +63,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signIn = useCallback(async (email: string, password: string) => {
     const { data } = await api.login(email, password)
     setAccessToken(data.tokens.accessToken)
+    setRefreshToken(data.tokens.refreshToken)
     setAdmin(data.admin)
   }, [])
 
   const signOut = useCallback(async () => {
     try {
-      await api.post('/admin/auth/logout')
+      await api.logout()
     } finally {
       setAccessToken(null)
+      setRefreshToken(null)
       setAdmin(null)
     }
   }, [])

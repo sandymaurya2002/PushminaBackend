@@ -28,7 +28,8 @@ interface Asset {
   folder: string
   alt: string | null
   createdAt: string
-  uploadedBy: { id: string; name: string } | null
+  isPublic: boolean
+  usage: number
 }
 
 function formatBytes(bytes: number): string {
@@ -63,7 +64,7 @@ export function Media() {
     mutationFn: async (files: FileList) => {
       const formData = new FormData()
       Array.from(files).forEach((file) => formData.append('files', file))
-      formData.append('folder', folder || 'general')
+      formData.append('folder', folder || 'products')
       return api.upload<Asset[]>('/admin/media', formData)
     },
     onSuccess: (result) => {
@@ -76,6 +77,17 @@ export function Media() {
     onError: (caught) =>
       toast({
         title: 'Upload failed',
+        description: caught instanceof ApiError ? caught.message : 'Unexpected error.',
+        tone: 'error',
+      }),
+  })
+
+  const visibilityMutation = useMutation({
+    mutationFn: async (asset: Asset) => api.patch(`/admin/media/${asset.id}`, { isPublic: !asset.isPublic }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['admin-media'] }),
+    onError: (caught) =>
+      toast({
+        title: 'Could not update',
         description: caught instanceof ApiError ? caught.message : 'Unexpected error.',
         tone: 'error',
       }),
@@ -98,13 +110,13 @@ export function Media() {
     },
   })
 
-  const folders = (data?.meta?.folders ?? []) as string[]
+  const folders = (data?.meta?.allowedFolders ?? []) as string[]
 
   return (
     <>
       <PageHeader
         title="Media library"
-        description="Images used across products, banners and the journal. Uploads are resized and given a thumbnail automatically."
+        description="Images stored in the private R2 bucket. Only images marked public are served to the storefront. JPEG, PNG, WebP, AVIF or GIF, up to 10 MB."
         actions={
           can('media.upload') && (
             <>
@@ -112,7 +124,7 @@ export function Media() {
                 ref={fileInput}
                 type="file"
                 multiple
-                accept="image/*,video/mp4,video/webm"
+                accept="image/jpeg,image/png,image/webp,image/avif,image/gif"
                 className="hidden"
                 onChange={(event) => {
                   if (event.target.files?.length) uploadMutation.mutate(event.target.files)
@@ -209,7 +221,22 @@ export function Media() {
                     <p className="text-[0.625rem] text-taupe">
                       {asset.width && asset.height ? `${asset.width}×${asset.height} · ` : ''}
                       {formatBytes(asset.size)}
+                      {asset.usage > 0 && ` · used ${asset.usage}×`}
                     </p>
+                    {can('media.upload') ? (
+                      <button
+                        type="button"
+                        onClick={() => visibilityMutation.mutate(asset)}
+                        disabled={visibilityMutation.isPending}
+                        className="mt-1 text-[0.625rem] uppercase tracking-[0.1em] text-mocha hover:text-charcoal"
+                      >
+                        {asset.isPublic ? 'Public · make private' : 'Private · make public'}
+                      </button>
+                    ) : (
+                      <p className="mt-1 text-[0.625rem] uppercase tracking-[0.1em] text-mocha">
+                        {asset.isPublic ? 'Public' : 'Private'}
+                      </p>
+                    )}
                   </div>
 
                   <div className="absolute right-1.5 top-1.5 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
@@ -255,7 +282,7 @@ export function Media() {
         onConfirm={() => deleting && deleteMutation.mutate(deleting.id)}
         busy={deleteMutation.isPending}
         title="Delete this file?"
-        message="The file is removed from disk permanently. If it is still used by a product, banner or article, the deletion will be refused."
+        message="The file is removed from storage permanently. If a product still uses it, the deletion is refused."
       />
     </>
   )

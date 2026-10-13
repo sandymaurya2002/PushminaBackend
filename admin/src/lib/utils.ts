@@ -92,16 +92,16 @@ export function debounce<T extends (...args: never[]) => void>(fn: T, delay = 30
 
 export const ORDER_STATUS_TONE: Record<string, string> = {
   PENDING: 'border-line-strong text-mocha',
-  PLACED: 'border-line-strong text-mocha',
   CONFIRMED: 'border-gold/50 text-gold',
-  PROCESSING: 'border-gold/50 text-gold',
+  PACKED: 'border-gold/50 text-gold',
   SHIPPED: 'border-gold/50 text-gold',
   DELIVERED: 'border-success/40 text-success',
   CANCELLED: 'border-burgundy/40 text-burgundy',
-  RETURNED: 'border-burgundy/40 text-burgundy',
 }
 
 export const PAYMENT_STATUS_TONE: Record<string, string> = {
+  UNPAID: 'border-line-strong text-mocha',
+  PAID: 'border-success/40 text-success',
   CREATED: 'border-line-strong text-taupe',
   PENDING: 'border-line-strong text-mocha',
   AUTHORIZED: 'border-gold/50 text-gold',

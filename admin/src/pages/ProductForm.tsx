@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, Plus, Trash2 } from 'lucide-react'
+import { ChevronLeft, Plus, Trash2, Upload } from 'lucide-react'
 import { api, ApiError } from '@/lib/api'
 import {
   Card,
@@ -217,6 +217,42 @@ export function ProductForm() {
         tone: 'error',
       }),
   })
+
+  const [uploading, setUploading] = useState(false)
+
+  /** Uploads to the private R2 bucket via the API, then attaches the returned /media/… paths. */
+  async function uploadImages(files: File[]) {
+    setUploading(true)
+    try {
+      const formData = new FormData()
+      for (const file of files) formData.append('files', file)
+      formData.append('folder', 'products')
+      if (form.name) formData.append('alt', form.name)
+      const { data } = await api.upload<Array<{ path: string; alt: string | null; width: number | null; height: number | null }>>(
+        '/admin/media',
+        formData,
+      )
+      setImages((current) => [
+        ...current,
+        ...data.map((asset, index) => ({
+          url: asset.path,
+          alt: asset.alt ?? form.name,
+          width: asset.width ?? 1200,
+          height: asset.height ?? 1500,
+          isPrimary: current.length === 0 && index === 0,
+        })),
+      ])
+      toast({ title: `${data.length} image(s) uploaded`, description: 'Save the product to keep them.' })
+    } catch (caught) {
+      toast({
+        title: 'Upload failed',
+        description: caught instanceof ApiError ? caught.message : 'Unexpected error.',
+        tone: 'error',
+      })
+    } finally {
+      setUploading(false)
+    }
+  }
 
   /**
    * Builds one variant per colour × size combination, preserving SKU and stock
@@ -700,19 +736,39 @@ export function ProductForm() {
           title="Images"
           actions={
             !readOnly && (
-              <button
-                type="button"
-                onClick={() =>
-                  setImages([
-                    ...images,
-                    { url: '', alt: '', width: 800, height: 1000, isPrimary: images.length === 0 },
-                  ])
-                }
-                className="btn-outline btn-sm"
-              >
-                <Plus className="h-3 w-3" strokeWidth={2} />
-                Add image
-              </button>
+              <div className="flex gap-2">
+                {can('media.upload') && (
+                  <label className={cn('btn-primary btn-sm cursor-pointer', uploading && 'opacity-60')}>
+                    {uploading ? <Spinner /> : <Upload className="h-3 w-3" strokeWidth={2} />}
+                    Upload
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/avif,image/gif"
+                      multiple
+                      className="sr-only"
+                      disabled={uploading}
+                      onChange={(event) => {
+                        const files = Array.from(event.target.files ?? [])
+                        event.target.value = ''
+                        if (files.length) void uploadImages(files)
+                      }}
+                    />
+                  </label>
+                )}
+                <button
+                  type="button"
+                  onClick={() =>
+                    setImages([
+                      ...images,
+                      { url: '', alt: '', width: 800, height: 1000, isPrimary: images.length === 0 },
+                    ])
+                  }
+                  className="btn-outline btn-sm"
+                >
+                  <Plus className="h-3 w-3" strokeWidth={2} />
+                  Add by URL
+                </button>
+              </div>
             )
           }
         >
@@ -728,7 +784,7 @@ export function ProductForm() {
               <div key={index} className="flex gap-3 border border-line bg-cream/20 p-3">
                 <div className="h-24 w-20 shrink-0 overflow-hidden bg-ivory-deep">
                   {image.url && (
-                    <img src={image.url} alt={image.alt} className="h-full w-full object-cover" />
+                    <img src={api.absolute(image.url)} alt={image.alt} className="h-full w-full object-cover" />
                   )}
                 </div>
 
@@ -738,12 +794,12 @@ export function ProductForm() {
                     onChange={(event) =>
                       setImages(
                         images.map((entry, position) =>
-                          position === index ? { ...entry, url: event.target.value } : entry,
+                          position === index ? { ...entry, url: api.mediaPath(event.target.value) } : entry,
                         ),
                       )
                     }
                     className="input"
-                    placeholder="/images/products/…"
+                    placeholder="Upload, or paste a Media Library or https:// image URL"
                     disabled={readOnly}
                     aria-label="Image URL"
                   />

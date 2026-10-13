@@ -24,28 +24,11 @@ const Orders = lazy(() => import('@/pages/Orders').then((m) => ({ default: m.Ord
 const OrderDetail = lazy(() =>
   import('@/pages/OrderDetail').then((m) => ({ default: m.OrderDetail })),
 )
-const Payments = lazy(() => import('@/pages/Payments').then((m) => ({ default: m.Payments })))
-const Refunds = lazy(() => import('@/pages/Refunds').then((m) => ({ default: m.Refunds })))
 const Customers = lazy(() => import('@/pages/Customers').then((m) => ({ default: m.Customers })))
 const CustomerDetail = lazy(() =>
   import('@/pages/CustomerDetail').then((m) => ({ default: m.CustomerDetail })),
 )
-const Reviews = lazy(() => import('@/pages/Reviews').then((m) => ({ default: m.Reviews })))
-const Content = lazy(() => import('@/pages/Content').then((m) => ({ default: m.Content })))
-const Pages = lazy(() => import('@/pages/Pages').then((m) => ({ default: m.Pages })))
-const Blog = lazy(() => import('@/pages/Blog').then((m) => ({ default: m.Blog })))
-const BlogForm = lazy(() => import('@/pages/BlogForm').then((m) => ({ default: m.BlogForm })))
 const Media = lazy(() => import('@/pages/Media').then((m) => ({ default: m.Media })))
-const Seo = lazy(() => import('@/pages/Seo').then((m) => ({ default: m.Seo })))
-const Coupons = lazy(() => import('@/pages/Coupons').then((m) => ({ default: m.Coupons })))
-const Notifications = lazy(() =>
-  import('@/pages/Notifications').then((m) => ({ default: m.Notifications })),
-)
-const Contact = lazy(() => import('@/pages/Contact').then((m) => ({ default: m.Contact })))
-const Newsletter = lazy(() =>
-  import('@/pages/Newsletter').then((m) => ({ default: m.Newsletter })),
-)
-const Settings = lazy(() => import('@/pages/Settings').then((m) => ({ default: m.Settings })))
 const Admins = lazy(() => import('@/pages/Admins').then((m) => ({ default: m.Admins })))
 const Audit = lazy(() => import('@/pages/Audit').then((m) => ({ default: m.Audit })))
 const Account = lazy(() => import('@/pages/Account').then((m) => ({ default: m.Account })))
@@ -89,6 +72,32 @@ function RequirePermission({
   }
 
   return <>{children}</>
+}
+
+/** Screens from the Express admin whose APIs have not been migrated to Cloudflare yet. */
+const UNAVAILABLE_PATHS = [
+  '/coupons',
+  '/payments',
+  '/refunds',
+  '/reviews',
+  '/content',
+  '/pages',
+  '/blog/*',
+  '/blog',
+  '/seo',
+  '/notifications',
+  '/contact',
+  '/newsletter',
+  '/settings',
+]
+
+function Unavailable() {
+  return (
+    <EmptyState
+      title="Not available yet"
+      description="This module has not been moved to the new Cloudflare backend yet."
+    />
+  )
 }
 
 export function App() {
@@ -167,15 +176,6 @@ export function App() {
                   }
                 />
                 <Route
-                  path="/coupons"
-                  element={
-                    <RequirePermission permission="discounts.view">
-                      <Coupons />
-                    </RequirePermission>
-                  }
-                />
-
-                <Route
                   path="/orders"
                   element={
                     <RequirePermission permission="orders.view">
@@ -188,22 +188,6 @@ export function App() {
                   element={
                     <RequirePermission permission="orders.view">
                       <OrderDetail />
-                    </RequirePermission>
-                  }
-                />
-                <Route
-                  path="/payments"
-                  element={
-                    <RequirePermission permission="payments.view">
-                      <Payments />
-                    </RequirePermission>
-                  }
-                />
-                <Route
-                  path="/refunds"
-                  element={
-                    <RequirePermission permission="refunds.view">
-                      <Refunds />
                     </RequirePermission>
                   }
                 />
@@ -224,55 +208,6 @@ export function App() {
                   }
                 />
                 <Route
-                  path="/reviews"
-                  element={
-                    <RequirePermission permission="reviews.view">
-                      <Reviews />
-                    </RequirePermission>
-                  }
-                />
-
-                <Route
-                  path="/content"
-                  element={
-                    <RequirePermission permission="content.view">
-                      <Content />
-                    </RequirePermission>
-                  }
-                />
-                <Route
-                  path="/pages"
-                  element={
-                    <RequirePermission permission="content.view">
-                      <Pages />
-                    </RequirePermission>
-                  }
-                />
-                <Route
-                  path="/blog"
-                  element={
-                    <RequirePermission permission="blog.view">
-                      <Blog />
-                    </RequirePermission>
-                  }
-                />
-                <Route
-                  path="/blog/new"
-                  element={
-                    <RequirePermission permission="blog.create">
-                      <BlogForm />
-                    </RequirePermission>
-                  }
-                />
-                <Route
-                  path="/blog/:id"
-                  element={
-                    <RequirePermission permission="blog.view">
-                      <BlogForm />
-                    </RequirePermission>
-                  }
-                />
-                <Route
                   path="/media"
                   element={
                     <RequirePermission permission="media.view">
@@ -280,48 +215,10 @@ export function App() {
                     </RequirePermission>
                   }
                 />
-                <Route
-                  path="/seo"
-                  element={
-                    <RequirePermission permission="seo.view">
-                      <Seo />
-                    </RequirePermission>
-                  }
-                />
+                {UNAVAILABLE_PATHS.map((path) => (
+                  <Route key={path} path={path} element={<Unavailable />} />
+                ))}
 
-                <Route
-                  path="/notifications"
-                  element={
-                    <RequirePermission permission="notifications.view">
-                      <Notifications />
-                    </RequirePermission>
-                  }
-                />
-                <Route
-                  path="/contact"
-                  element={
-                    <RequirePermission permission="contact.view">
-                      <Contact />
-                    </RequirePermission>
-                  }
-                />
-                <Route
-                  path="/newsletter"
-                  element={
-                    <RequirePermission permission="newsletter.view">
-                      <Newsletter />
-                    </RequirePermission>
-                  }
-                />
-
-                <Route
-                  path="/settings"
-                  element={
-                    <RequirePermission permission="settings.view">
-                      <Settings />
-                    </RequirePermission>
-                  }
-                />
                 <Route
                   path="/admins"
                   element={

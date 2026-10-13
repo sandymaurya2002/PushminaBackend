@@ -42,7 +42,7 @@ export function Login() {
       setError(
         caught instanceof ApiError
           ? caught.message
-          : 'Could not sign in. Is the API running on port 5000?',
+          : 'Could not reach the API. Please try again.',
       )
     } finally {
       setSubmitting(false)
@@ -53,7 +53,10 @@ export function Login() {
     <div className="flex min-h-screen bg-ivory">
       <div className="flex w-full items-center justify-center px-5 py-16 lg:w-1/2">
         <div className="w-full max-w-sm">
-          <p className="font-serif text-2xl tracking-[0.3em] text-charcoal">PUSHMINA</p>
+          <div className="flex items-center gap-4">
+            <img src="/logo.png" alt="" width={64} height={64} className="h-16 w-16" />
+            <p className="font-serif text-2xl tracking-[0.3em] text-charcoal">PUSHMINA</p>
+          </div>
           <p className="eyebrow mt-8 text-gold">Administration</p>
           <h1 className="mt-4 font-serif text-3xl leading-tight text-charcoal">Sign in</h1>
           <p className="mt-3 text-sm leading-relaxed text-mocha">
@@ -112,6 +115,7 @@ export function Login() {
       {/* Decorative panel, hidden from assistive technology. */}
       <div className="relative hidden bg-charcoal lg:block lg:w-1/2" aria-hidden>
         <div className="flex h-full flex-col justify-end p-14">
+          <img src="/logo.png" alt="" width={512} height={512} className="mx-auto mb-auto mt-8 w-72 max-w-[60%] opacity-95" />
           <p className="eyebrow text-gold-soft">Since 1978</p>
           <p className="mt-5 max-w-md font-serif text-3xl leading-tight text-ivory">
             Timeless Indian craftsmanship, woven for modern luxury.

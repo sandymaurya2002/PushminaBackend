@@ -33,16 +33,7 @@ interface OrderRow {
   items: Array<{ id: string; name: string; quantity: number; imageUrl: string | null }>
 }
 
-const STATUSES = [
-  'PENDING',
-  'PLACED',
-  'CONFIRMED',
-  'PROCESSING',
-  'SHIPPED',
-  'DELIVERED',
-  'CANCELLED',
-  'RETURNED',
-]
+const STATUSES = ['PENDING', 'CONFIRMED', 'PACKED', 'SHIPPED', 'DELIVERED', 'CANCELLED']
 
 export function Orders() {
   const [params, setParams] = useSearchParams()
@@ -151,9 +142,8 @@ export function Orders() {
           aria-label="Filter by payment status"
         >
           <option value="">Any payment</option>
-          <option value="CAPTURED">Paid</option>
-          <option value="PENDING">Pending</option>
-          <option value="FAILED">Failed</option>
+          <option value="UNPAID">Unpaid (cash on delivery)</option>
+          <option value="PAID">Paid</option>
           <option value="REFUNDED">Refunded</option>
         </select>
 

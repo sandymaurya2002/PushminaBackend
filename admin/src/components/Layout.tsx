@@ -2,23 +2,15 @@ import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
-  Bell,
   Boxes,
   ChevronDown,
-  CreditCard,
   FileText,
   Image,
   LayoutDashboard,
   LogOut,
-  Mail,
   Menu,
-  MessageSquare,
-  Newspaper,
   Package,
   Palette,
-  Percent,
-  Search,
-  Settings,
   ShieldCheck,
   ShoppingBag,
   Star,
@@ -35,7 +27,7 @@ interface NavEntry {
   icon: typeof LayoutDashboard
   /** Hidden entirely when the signed-in role lacks this permission. */
   permission?: string
-  badgeKey?: 'orders' | 'reviews' | 'contact' | 'refunds'
+  badgeKey?: 'orders' | 'stock'
 }
 
 interface NavGroup {
@@ -43,6 +35,11 @@ interface NavGroup {
   entries: NavEntry[]
 }
 
+/**
+ * Only modules the Cloudflare API implements. Payments, refunds, discounts,
+ * reviews, CMS content, blog, SEO, notifications, enquiries, newsletter and
+ * settings are not migrated yet; their API routes answer 501.
+ */
 const NAV: NavGroup[] = [
   {
     title: 'Overview',
@@ -51,50 +48,30 @@ const NAV: NavGroup[] = [
   {
     title: 'Catalogue',
     entries: [
-      { label: 'Products', to: '/products', icon: Package, permission: 'products.view' },
+      { label: 'Products', to: '/products', icon: Package, permission: 'products.view', badgeKey: 'stock' },
       { label: 'Collections', to: '/collections', icon: Boxes, permission: 'collections.view' },
       { label: 'Filters & Taxonomy', to: '/taxonomy', icon: Palette, permission: 'taxonomy.view' },
       { label: 'Merchandising', to: '/merchandising', icon: Star, permission: 'products.merchandise' },
-      { label: 'Discounts', to: '/coupons', icon: Percent, permission: 'discounts.view' },
+      { label: 'Media Library', to: '/media', icon: Image, permission: 'media.view' },
     ],
   },
   {
     title: 'Sales',
     entries: [
       { label: 'Orders', to: '/orders', icon: ShoppingBag, permission: 'orders.view', badgeKey: 'orders' },
-      { label: 'Payments', to: '/payments', icon: CreditCard, permission: 'payments.view' },
-      { label: 'Refunds', to: '/refunds', icon: CreditCard, permission: 'refunds.view', badgeKey: 'refunds' },
       { label: 'Customers', to: '/customers', icon: Users, permission: 'customers.view' },
-      { label: 'Reviews', to: '/reviews', icon: Star, permission: 'reviews.view', badgeKey: 'reviews' },
-    ],
-  },
-  {
-    title: 'Content',
-    entries: [
-      { label: 'Homepage & Banners', to: '/content', icon: Image, permission: 'content.view' },
-      { label: 'Pages', to: '/pages', icon: FileText, permission: 'content.view' },
-      { label: 'Journal', to: '/blog', icon: Newspaper, permission: 'blog.view' },
-      { label: 'Media Library', to: '/media', icon: Image, permission: 'media.view' },
-      { label: 'SEO', to: '/seo', icon: Search, permission: 'seo.view' },
-    ],
-  },
-  {
-    title: 'Engagement',
-    entries: [
-      { label: 'Notifications', to: '/notifications', icon: Bell, permission: 'notifications.view' },
-      { label: 'Enquiries', to: '/contact', icon: MessageSquare, permission: 'contact.view', badgeKey: 'contact' },
-      { label: 'Newsletter', to: '/newsletter', icon: Mail, permission: 'newsletter.view' },
     ],
   },
   {
     title: 'System',
     entries: [
-      { label: 'Settings', to: '/settings', icon: Settings, permission: 'settings.view' },
       { label: 'Admins & Roles', to: '/admins', icon: ShieldCheck, permission: 'admins.view' },
       { label: 'Audit Log', to: '/audit', icon: FileText, permission: 'audit.view' },
     ],
   },
 ]
+
+const STOREFRONT_URL = import.meta.env.VITE_STOREFRONT_URL ?? 'https://www.pashmore.com'
 
 export function Layout() {
   const { admin, signOut, can } = useAuth()
@@ -114,33 +91,14 @@ export function Layout() {
   const { data: counts } = useQuery({
     queryKey: ['sidebar-counts'],
     queryFn: async () => {
-      const [orders, reviews, contact, refunds, notifications] = await Promise.all([
-        can('orders.view')
-          ? api.get<Record<string, number>>('/admin/dashboard/order-stats').catch(() => ({ data: {} }))
-          : Promise.resolve({ data: {} }),
-        can('reviews.view')
-          ? api.get('/admin/reviews', { status: 'PENDING', limit: 1 }).catch(() => ({ meta: {} }))
-          : Promise.resolve({ meta: {} }),
-        can('contact.view')
-          ? api.get('/admin/contact', { status: 'NEW', limit: 1 }).catch(() => ({ meta: {} }))
-          : Promise.resolve({ meta: {} }),
-        can('refunds.view')
-          ? api.get('/admin/payments/refunds/all', { status: 'REQUESTED', limit: 1 }).catch(() => ({ meta: {} }))
-          : Promise.resolve({ meta: {} }),
-        can('notifications.view')
-          ? api.get<{ count: number }>('/admin/notifications/unread-count').catch(() => ({ data: { count: 0 } }))
-          : Promise.resolve({ data: { count: 0 } }),
-      ])
+      const { data: stats } = can('dashboard.view')
+        ? await api.get<Record<string, number>>('/admin/dashboard/order-stats').catch(() => ({ data: {} as Record<string, number> }))
+        : { data: {} as Record<string, number> }
 
-      const orderStats = (orders as { data: Record<string, number> }).data ?? {}
-
+      // Orders still needing action before they ship.
       return {
-        orders:
-          (orderStats.PLACED ?? 0) + (orderStats.CONFIRMED ?? 0) + (orderStats.PROCESSING ?? 0),
-        reviews: ((reviews as { meta?: { pendingCount?: number } }).meta?.pendingCount ?? 0),
-        contact: ((contact as { meta?: { newCount?: number } }).meta?.newCount ?? 0),
-        refunds: ((refunds as { meta?: { pendingCount?: number } }).meta?.pendingCount ?? 0),
-        notifications: (notifications as { data: { count: number } }).data?.count ?? 0,
+        orders: (stats.PENDING ?? 0) + (stats.CONFIRMED ?? 0) + (stats.PACKED ?? 0),
+        stock: stats.lowStock ?? 0,
       }
     },
     refetchInterval: 60_000,
@@ -176,7 +134,8 @@ export function Layout() {
         )}
       >
         <div className="flex h-16 shrink-0 items-center justify-between border-b border-line px-5">
-          <Link to="/" className="font-serif text-lg tracking-[0.22em] text-charcoal">
+          <Link to="/" className="flex items-center gap-2.5 font-serif text-lg tracking-[0.22em] text-charcoal">
+            <img src="/logo.png" alt="" width={36} height={36} className="h-9 w-9" />
             PUSHMINA
           </Link>
           <button
@@ -228,7 +187,7 @@ export function Layout() {
 
         <div className="shrink-0 border-t border-line p-3">
           <a
-            href="http://localhost:3000"
+            href={STOREFRONT_URL}
             target="_blank"
             rel="noopener noreferrer"
             className="block rounded px-2.5 py-2 text-xs text-taupe transition-colors hover:bg-cream hover:text-charcoal"
@@ -251,23 +210,6 @@ export function Layout() {
           </button>
 
           <div className="flex-1" />
-
-          <Link
-            to="/notifications"
-            className="relative p-2 text-charcoal transition-colors hover:text-gold"
-            aria-label={
-              counts?.notifications
-                ? `Notifications, ${counts.notifications} unread`
-                : 'Notifications'
-            }
-          >
-            <Bell className="h-[1.15rem] w-[1.15rem]" strokeWidth={1.4} />
-            {(counts?.notifications ?? 0) > 0 && (
-              <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-gold px-1 text-[0.5625rem] leading-none text-ivory">
-                {counts!.notifications > 9 ? '9+' : counts!.notifications}
-              </span>
-            )}
-          </Link>
 
           <div className="relative">
             <button

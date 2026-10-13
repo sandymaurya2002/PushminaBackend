@@ -16,8 +16,8 @@ export default defineConfig({
      * picture while developing.
      */
     proxy: {
-      '/api': { target: 'http://localhost:5000', changeOrigin: true },
-      '/uploads': { target: 'http://localhost:5000', changeOrigin: true },
+      '/api': { target: 'http://localhost:8787', changeOrigin: true },
+      '/media': { target: 'http://localhost:8787', changeOrigin: true },
     },
   },
   build: {

@@ -9,7 +9,9 @@
  *      and turning `{ success: false, error }` into a thrown ApiError.
  */
 
-const BASE = '/api/v1'
+/** Empty in development (Vite proxies /api); the Worker's URL in production builds. */
+const API_ORIGIN = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/+$/, '')
+const BASE = `${API_ORIGIN}/api/v1`
 
 let accessToken: string | null = localStorage.getItem('pushmina_admin_token')
 
@@ -17,6 +19,24 @@ export function setAccessToken(token: string | null): void {
   accessToken = token
   if (token) localStorage.setItem('pushmina_admin_token', token)
   else localStorage.removeItem('pushmina_admin_token')
+}
+
+/**
+ * The API lives on a different site than the admin, so its HttpOnly refresh
+ * cookie is third-party and browsers that block those (Safari, strict modes)
+ * never send it. The rotated refresh token is therefore also kept for this tab
+ * only and sent in the request body; the API accepts either.
+ */
+const REFRESH_KEY = 'pushmina_admin_refresh'
+
+export function setRefreshToken(token: string | null): void {
+  if (token) sessionStorage.setItem(REFRESH_KEY, token)
+  else sessionStorage.removeItem(REFRESH_KEY)
+}
+
+function refreshBody(): string {
+  const token = sessionStorage.getItem(REFRESH_KEY)
+  return JSON.stringify(token ? { refreshToken: token } : {})
 }
 
 export function getAccessToken(): string | null {
@@ -71,16 +91,20 @@ async function refreshAccessToken(): Promise<boolean> {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: '{}',
+        body: refreshBody(),
       })
 
-      if (!response.ok) return false
+      if (!response.ok) {
+        setRefreshToken(null)
+        return false
+      }
 
-      const body = (await response.json()) as { data?: { tokens?: { accessToken: string } } }
+      const body = (await response.json()) as { data?: { tokens?: { accessToken: string; refreshToken?: string } } }
       const token = body.data?.tokens?.accessToken
       if (!token) return false
 
       setAccessToken(token)
+      setRefreshToken(body.data?.tokens?.refreshToken ?? null)
       return true
     } catch {
       return false
@@ -95,6 +119,7 @@ async function refreshAccessToken(): Promise<boolean> {
 /** Broadcast so AuthProvider can clear state without a circular import. */
 function signalSessionExpired(): void {
   setAccessToken(null)
+  setRefreshToken(null)
   window.dispatchEvent(new CustomEvent('pushmina:session-expired'))
 }
 
@@ -218,6 +243,23 @@ export const api = {
       body: { email, password },
       retryOnUnauthorised: false,
     }),
+
+  logout: () =>
+    request<unknown>('/admin/auth/logout', {
+      method: 'POST',
+      body: JSON.parse(refreshBody()),
+      retryOnUnauthorised: false,
+    }),
+
+  /** Absolute URL for API-served paths such as /media/… image keys. */
+  absolute: (path: string) => (path.startsWith('/') ? `${API_ORIGIN}${path}` : path),
+
+  /** Stores API-hosted media as its /media/… path so the API can link it to the upload record. */
+  mediaPath: (url: string) => {
+    const trimmed = url.trim()
+    if (API_ORIGIN && trimmed.startsWith(`${API_ORIGIN}/media/`)) return trimmed.slice(API_ORIGIN.length)
+    return trimmed
+  },
 
   /** Triggers a browser download for CSV exports. */
   download: async (path: string, params?: Record<string, unknown>) => {

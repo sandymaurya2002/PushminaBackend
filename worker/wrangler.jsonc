@@ -1,0 +1,37 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "pashmore-api",
+  "account_id": "67f122c7c1dc42bc2b275ef9626129cb",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": false,
+  "observability": { "enabled": true },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "pashmore-db",
+      "database_id": "55332b90-0ba5-43bd-9921-6afa26601004",
+      "migrations_dir": "migrations",
+      "migrations_table": "d1_migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "MEDIA",
+      "bucket_name": "pashmore-media"
+    }
+  ],
+  "vars": {
+    "FRONTEND_ORIGIN": "https://www.pashmore.com,https://pashmore.com",
+    "ADMIN_ORIGIN": "https://pashmore-admin.pages.dev",
+    "ENABLE_COD_ORDERS": "false",
+    "ACCESS_TOKEN_TTL_SECONDS": "900",
+    "REFRESH_TOKEN_TTL_SECONDS": "2592000",
+    "ADMIN_REFRESH_TOKEN_TTL_SECONDS": "43200"
+  },
+  "triggers": {
+    "crons": ["17 3 * * *"]
+  }
+}

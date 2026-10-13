@@ -28,6 +28,9 @@ interface OrderDetailData {
   email: string
   phone: string
   status: string
+  allowedTransitions: string[]
+  paymentStatus: string
+  paymentMethod: string
   subtotal: number
   discount: number
   shippingFee: number
@@ -78,16 +81,11 @@ interface OrderDetailData {
   invoice: { invoiceNumber: string; issuedAt: string } | null
 }
 
-/** Mirrors the backend's transition rules, so the UI cannot offer an illegal move. */
-const NEXT_STATUSES: Record<string, string[]> = {
-  PENDING: ['PLACED', 'CONFIRMED', 'CANCELLED'],
-  PLACED: ['CONFIRMED', 'PROCESSING', 'CANCELLED'],
-  CONFIRMED: ['PROCESSING', 'SHIPPED', 'CANCELLED'],
-  PROCESSING: ['SHIPPED', 'CANCELLED'],
-  SHIPPED: ['DELIVERED', 'RETURNED'],
-  DELIVERED: ['RETURNED'],
-  CANCELLED: [],
-  RETURNED: [],
+/** The permission the API requires for each target status. */
+function permissionFor(status: string): string {
+  if (status === 'CANCELLED') return 'orders.cancel'
+  if (status === 'PACKED' || status === 'SHIPPED' || status === 'DELIVERED') return 'orders.fulfil'
+  return 'orders.update'
 }
 
 export function OrderDetail() {
@@ -100,9 +98,6 @@ export function OrderDetail() {
   const [note, setNote] = useState('')
   const [tracking, setTracking] = useState('')
   const [carrier, setCarrier] = useState('')
-  const [refundModal, setRefundModal] = useState(false)
-  const [refundAmount, setRefundAmount] = useState('')
-  const [refundReason, setRefundReason] = useState('')
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['admin-order', id],
@@ -125,33 +120,11 @@ export function OrderDetail() {
       setNote('')
       setTracking('')
       setCarrier('')
-      toast({ title: 'Order updated', description: 'The customer has been notified.' })
+      toast({ title: 'Order updated', description: 'The customer sees the new status in their account.' })
     },
     onError: (caught) =>
       toast({
         title: 'Could not update',
-        description: caught instanceof ApiError ? caught.message : 'Unexpected error.',
-        tone: 'error',
-      }),
-  })
-
-  const refundMutation = useMutation({
-    mutationFn: async () =>
-      api.post('/admin/payments/refunds', {
-        orderId: id,
-        amount: refundAmount ? Number(refundAmount) : undefined,
-        reason: refundReason,
-      }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['admin-order', id] })
-      setRefundModal(false)
-      setRefundAmount('')
-      setRefundReason('')
-      toast({ title: 'Refund requested', description: 'Approve it from the Refunds screen.' })
-    },
-    onError: (caught) =>
-      toast({
-        title: 'Could not request refund',
         description: caught instanceof ApiError ? caught.message : 'Unexpected error.',
         tone: 'error',
       }),
@@ -162,8 +135,7 @@ export function OrderDetail() {
   if (!data) return null
 
   const address = data.shippingAddress
-  const captured = data.payments.find((payment) => payment.status === 'CAPTURED')
-  const nextStatuses = NEXT_STATUSES[data.status] ?? []
+  const nextStatuses = data.allowedTransitions.filter((status) => can(permissionFor(status)))
 
   return (
     <>
@@ -180,33 +152,25 @@ export function OrderDetail() {
         description={`Placed ${formatDateTime(data.placedAt)} · ${data.shippingMethod} shipping`}
         actions={
           <div className="flex flex-wrap gap-2">
-            {can('orders.update') &&
-              nextStatuses.map((status) => (
-                <button
-                  key={status}
-                  type="button"
-                  onClick={() => setStatusModal(status)}
-                  className={status === 'CANCELLED' ? 'btn-outline' : 'btn-primary'}
-                >
-                  Mark {status.toLowerCase()}
-                </button>
-              ))}
-            {can('refunds.create') && captured && (
-              <button type="button" onClick={() => setRefundModal(true)} className="btn-outline">
-                Refund
+            {nextStatuses.map((status) => (
+              <button
+                key={status}
+                type="button"
+                onClick={() => setStatusModal(status)}
+                className={status === 'CANCELLED' ? 'btn-outline' : 'btn-primary'}
+              >
+                Mark {status.toLowerCase()}
               </button>
-            )}
+            ))}
           </div>
         }
       />
 
       <div className="mb-6 flex flex-wrap items-center gap-2">
         <Badge className={ORDER_STATUS_TONE[data.status]}>{data.status}</Badge>
-        {data.payments[0] && (
-          <Badge className={PAYMENT_STATUS_TONE[data.payments[0].status]}>
-            Payment {data.payments[0].status}
-          </Badge>
-        )}
+        <Badge className={PAYMENT_STATUS_TONE[data.paymentStatus]}>
+          {data.paymentMethod} · {data.paymentStatus.toLowerCase()}
+        </Badge>
         {data.invoice && (
           <span className="text-xs text-taupe">Invoice {data.invoice.invoiceNumber}</span>
         )}
@@ -412,8 +376,8 @@ export function OrderDetail() {
       >
         <div className="space-y-4">
           <p className="text-sm text-mocha">
-            The customer is emailed automatically when an order is confirmed, shipped, delivered or
-            cancelled.
+            The customer sees the new status in their account. Email notifications are not enabled
+            yet.
           </p>
 
           {statusModal === 'SHIPPED' && (
@@ -451,68 +415,9 @@ export function OrderDetail() {
 
           {statusModal === 'CANCELLED' && (
             <p className="border border-gold/40 bg-gold/5 px-4 py-3 text-xs text-gold">
-              Cancelling returns every item to stock. Any captured payment must be refunded
-              separately.
+              Cancelling returns every item to stock.
             </p>
           )}
-        </div>
-      </Modal>
-
-      {/* Refund */}
-      <Modal
-        open={refundModal}
-        onClose={() => setRefundModal(false)}
-        title="Request a refund"
-        footer={
-          <>
-            <button type="button" onClick={() => setRefundModal(false)} className="btn-ghost">
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={() => refundMutation.mutate()}
-              disabled={refundMutation.isPending || refundReason.trim().length < 3}
-              className="btn-danger"
-            >
-              {refundMutation.isPending && <Spinner />}
-              Request refund
-            </button>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          <Field
-            label="Amount"
-            htmlFor="refund-amount"
-            hint={`Leave blank to refund the full ${formatPrice(captured?.amount ?? data.total)}.`}
-          >
-            <input
-              id="refund-amount"
-              type="number"
-              min="1"
-              max={captured?.amount ?? data.total}
-              value={refundAmount}
-              onChange={(event) => setRefundAmount(event.target.value)}
-              className="input"
-              placeholder="Full amount"
-            />
-          </Field>
-
-          <Field label="Reason" htmlFor="refund-reason" required>
-            <textarea
-              id="refund-reason"
-              rows={3}
-              value={refundReason}
-              onChange={(event) => setRefundReason(event.target.value)}
-              className="input h-auto py-2"
-              placeholder="Returned by customer — piece not as expected."
-            />
-          </Field>
-
-          <p className="text-xs text-taupe">
-            This creates a refund request. No money moves until it is approved on the Refunds
-            screen.
-          </p>
         </div>
       </Modal>
     </>

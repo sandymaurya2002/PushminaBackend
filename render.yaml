@@ -4,8 +4,13 @@ services:
     runtime: node
     buildCommand: npm install --include=dev && npm run build && npm prune --omit=dev
     startCommand: npm start
+    healthCheckPath: /gateway/health
     envVars:
       - key: NODE_ENV
         value: production
       - key: NODE_VERSION
         value: 24.21.0
+      - key: WORKER_API_URL
+        sync: false
+      - key: GATEWAY_SECRET
+        sync: false
