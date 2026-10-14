@@ -343,7 +343,15 @@ export function Coupons() {
               />
             </Field>
 
-            <Field label="Minimum order (₹)" htmlFor="c-min">
+            <Field
+              label="Minimum order (₹)"
+              htmlFor="c-min"
+              hint={
+                form.type === 'PERCENT'
+                  ? 'International (USD) orders can use this code only when there is no minimum.'
+                  : 'Fixed-amount codes apply to India (₹) orders only.'
+              }
+            >
               <input
                 id="c-min"
                 type="number"

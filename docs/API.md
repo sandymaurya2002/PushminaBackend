@@ -1,5 +1,8 @@
 # Pushmina API Reference
 
+> **Retired.** This describes the old Node/Express API (`localhost:5000`). The live backend is
+> the Cloudflare Worker; see [WORKER-API.md](./WORKER-API.md).
+
 Base URL: `http://localhost:5000/api/v1`
 
 234 endpoints — 85 public/customer, 149 admin.

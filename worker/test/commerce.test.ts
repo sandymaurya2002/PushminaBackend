@@ -2,6 +2,7 @@ import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { app } from "../src/index";
 import { ADDRESS, call, createAdmin, createProduct, GATEWAY_SECRET, registerCustomer, stockOf, uniqueIp } from "./helpers";
+import { installRazorpayMock } from "./razorpay-mock";
 
 async function addToCart(token: string, variantId: string, quantity = 1) {
   const result = await call("/api/v1/cart/items", { token, body: { variantId, quantity } });
@@ -49,7 +50,7 @@ describe("products", () => {
     const product = await createProduct(admin.token);
     const duplicate = await call("/api/v1/admin/products", {
       token: admin.token,
-      body: { name: "Copy", slug: product.slug, price: 100, variants: [{ sku: `NEW-${Date.now()}`, inventory: 0 }] },
+      body: { name: "Copy", slug: product.slug, price: 100, priceUsd: 2, variants: [{ sku: `NEW-${Date.now()}`, inventory: 0 }] },
     });
     expect(duplicate.status).toBe(409);
     expect(duplicate.json.error?.code).toBe("SLUG_TAKEN");
@@ -149,7 +150,7 @@ describe("cart and wishlist", () => {
 });
 
 describe("orders", () => {
-  it("keeps checkout disabled unless ENABLE_COD_ORDERS is true", async () => {
+  it("keeps checkout disabled unless COD or Razorpay is configured", async () => {
     const admin = await createAdmin();
     const customer = await registerCustomer();
     const product = await createProduct(admin.token);
@@ -161,21 +162,27 @@ describe("orders", () => {
         headers: { authorization: `Bearer ${customer.token}`, "content-type": "application/json", "x-gateway-secret": GATEWAY_SECRET, "x-client-ip": uniqueIp() },
         body: JSON.stringify({ address: ADDRESS, paymentMethod: "COD" }),
       },
-      { ...env, ENABLE_COD_ORDERS: "false" },
+      { ...env, ENABLE_COD_ORDERS: "false", RAZORPAY_KEY_ID: "", RAZORPAY_KEY_SECRET: "" },
     );
     expect(response.status).toBe(503);
     expect(((await response.json()) as { error: { code: string } }).error.code).toBe("CHECKOUT_DISABLED");
     expect(await stockOf(product.id)).toBe(5);
   });
 
-  it("rejects online payment methods instead of faking success", async () => {
+  it("never marks an online order paid at checkout", async () => {
     const admin = await createAdmin();
     const customer = await registerCustomer();
     const product = await createProduct(admin.token);
     await addToCart(customer.token, product.raw.variants[0]!.id);
-    const result = await placeOrder(customer.token, { paymentMethod: "UPI" });
-    expect(result.status).toBe(422);
-    expect(await stockOf(product.id)).toBe(5);
+    const gateway = installRazorpayMock();
+    try {
+      const result = await placeOrder(customer.token, { paymentMethod: "UPI" });
+      expect(result.status).toBe(201);
+      expect(result.json.data).toMatchObject({ status: "payment_pending", paymentStatus: "PENDING", paymentMethod: "RAZORPAY", awaitingPayment: true });
+      expect(result.json.data.payment.razorpayOrderId).toMatch(/^order_/);
+    } finally {
+      gateway.restore();
+    }
   });
 
   it("places a COD order, decrements stock, clears the bag and records history", async () => {
@@ -258,7 +265,7 @@ describe("orders", () => {
     await addToCart(customer.token, product.raw.variants[0]!.id);
     const order = await placeOrder(customer.token);
     const id = order.json.data.id;
-    for (const status of ["CONFIRMED", "PACKED", "SHIPPED"]) {
+    for (const status of ["PROCESSING", "PACKED", "SHIPPED"]) {
       const step = await call(`/api/v1/admin/orders/${id}/status`, { method: "PATCH", token: admin.token, body: { status, trackingNumber: status === "SHIPPED" ? "TRK123" : undefined } });
       expect(step.status).toBe(200);
     }

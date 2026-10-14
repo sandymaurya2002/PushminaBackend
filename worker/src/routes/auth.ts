@@ -12,12 +12,14 @@ import {
   revokeSessionStatement,
   rotateRefreshToken,
 } from "../auth/sessions";
+import { passwordChangedMail, passwordResetMail, sendMail } from "../email/mailer";
 import { auditStatement } from "../lib/audit";
-import { burnPasswordCheck, hashPassword, verifyPassword } from "../lib/crypto";
-import { badRequest, conflict, isUniqueViolation, notFound, notImplemented, unauthorized } from "../lib/errors";
+import { burnPasswordCheck, hashPassword, randomToken, sha256Hex, verifyPassword } from "../lib/crypto";
+import { badRequest, conflict, isUniqueViolation, notFound, unauthorized, validationError } from "../lib/errors";
 import { created, noContent, ok } from "../lib/http";
+import { loginEventStatement, recordLoginEvent } from "../lib/login-events";
 import { newId, nowIso, toIso } from "../lib/util";
-import { addressInput, body, email, password, phone } from "../lib/validation";
+import { addressInput, addressPatch, addressProblems, body, email, password, phone } from "../lib/validation";
 import { currentUser, requireCustomer } from "../middleware/auth";
 import { rateLimit } from "../middleware/rate-limit";
 import type { AppEnv } from "../types";
@@ -92,6 +94,17 @@ authRoutes.post("/register", rateLimit({ name: "register", limit: 5, windowSecon
         .bind(id, input.email, `${input.firstName} ${input.lastName}`, input.firstName, input.lastName, hash, salt, input.phone ?? null, input.acceptsMarketing ? 1 : 0, nowIso()),
       statement,
       auditStatement(c, { action: "customer.register", entityType: "user", targetId: id, userId: id }),
+      loginEventStatement(c, { userId: id, kind: "CUSTOMER", event: "REGISTER", email: input.email }),
+      ...(input.acceptsMarketing
+        ? [
+            db
+              .prepare(
+                `INSERT INTO newsletter_subscribers (id, email, status, source, user_id) VALUES (?, ?, 'SUBSCRIBED', 'register', ?)
+                 ON CONFLICT(email) DO UPDATE SET status = 'SUBSCRIBED', user_id = excluded.user_id, unsubscribed_at = NULL`,
+              )
+              .bind(newId(), input.email, id),
+          ]
+        : []),
     ]);
   } catch (error) {
     if (isUniqueViolation(error)) {
@@ -118,6 +131,7 @@ authRoutes.post("/login", authLimit, async (c) => {
   const valid = user ? await verifyPassword(input.password, user.password_hash, user.password_salt) : (await burnPasswordCheck(input.password), false);
   if (!user || !valid || user.role !== "CUSTOMER" || user.active !== 1 || user.deleted_at) {
     await recordFailure(db, lockKey);
+    await recordLoginEvent(c, { userId: user?.role === "CUSTOMER" ? user.id : null, kind: "CUSTOMER", event: "LOGIN_FAILED", email: input.email });
     throw unauthorized("Incorrect email or password.");
   }
 
@@ -126,6 +140,7 @@ authRoutes.post("/login", authLimit, async (c) => {
     statement,
     clearFailuresStatement(db, lockKey),
     db.prepare(`UPDATE users SET last_login_at = ? WHERE id = ?`).bind(nowIso(), user.id),
+    loginEventStatement(c, { userId: user.id, kind: "CUSTOMER", event: "LOGIN", email: user.email }),
   ]);
   withRefreshCookie(c, tokens.refreshToken);
   return ok(c, { user: customerDto(user), tokens: publicTokens(tokens) });
@@ -148,16 +163,82 @@ authRoutes.post("/refresh", authLimit, async (c) => {
 authRoutes.post("/logout", async (c) => {
   const input = await body(c, refreshSchema).catch(() => ({}) as { refreshToken?: string });
   const token = input.refreshToken ?? readCookie(c, COOKIE.CUSTOMER.name);
-  if (token) await revokeByRefreshToken(c.env.DB, token, "CUSTOMER");
+  const userId = token ? await revokeByRefreshToken(c.env.DB, token, "CUSTOMER") : null;
+  if (userId) await recordLoginEvent(c, { userId, kind: "CUSTOMER", event: "LOGOUT" });
   c.header("Set-Cookie", clearRefreshCookie("CUSTOMER"), { append: true });
   return ok(c, { message: "Signed out." });
 });
 
-authRoutes.post("/forgot-password", authLimit, () => {
-  throw notImplemented("Password reset by email is not available yet. Please contact support.");
-});
-authRoutes.post("/reset-password", authLimit, () => {
-  throw notImplemented("Password reset by email is not available yet. Please contact support.");
+const RESET_TTL_MINUTES = 30;
+const RESET_MESSAGE = "If an account exists for that address, a reset link is on its way.";
+
+/**
+ * Always answers the same way, so it cannot be used to discover accounts. The
+ * emailed token is single-use, expires in 30 minutes, and only its SHA-256
+ * hash is stored; requesting a new link voids older ones.
+ */
+authRoutes.post(
+  "/forgot-password",
+  rateLimit({ name: "forgot-password", limit: 5, windowSeconds: 3600 }),
+  async (c) => {
+    const input = await body(c, z.object({ email }));
+    const db = c.env.DB;
+    const user = await db
+      .prepare(`SELECT id, email, name, first_name FROM users WHERE email = ? AND role = 'CUSTOMER' AND active = 1 AND deleted_at IS NULL`)
+      .bind(input.email)
+      .first<{ id: string; email: string; name: string; first_name: string | null }>();
+    if (!user) return ok(c, { message: RESET_MESSAGE });
+
+    const recent = await db
+      .prepare(`SELECT COUNT(*) AS n FROM password_resets WHERE user_id = ? AND created_at > datetime('now', '-1 hour')`)
+      .bind(user.id)
+      .first<{ n: number }>();
+    if ((recent?.n ?? 0) >= 3) return ok(c, { message: RESET_MESSAGE });
+
+    const token = randomToken("pr");
+    const now = Date.now();
+    await db.batch([
+      db.prepare(`UPDATE password_resets SET used_at = ? WHERE user_id = ? AND used_at IS NULL`).bind(now, user.id),
+      db
+        .prepare(`INSERT INTO password_resets (id, user_id, token_hash, expires_at, ip) VALUES (?, ?, ?, ?, ?)`)
+        .bind(newId(), user.id, await sha256Hex(token), now + RESET_TTL_MINUTES * 60_000, c.get("clientIp") ?? null),
+      loginEventStatement(c, { userId: user.id, kind: "CUSTOMER", event: "PASSWORD_RESET_REQUESTED", email: user.email }),
+    ]);
+    const config = c.get("config");
+    const link = `${config.storefrontUrl}/reset-password?token=${encodeURIComponent(token)}`;
+    c.executionCtx.waitUntil(sendMail(config, passwordResetMail(user.email, user.first_name ?? user.name.split(" ")[0] ?? "", link, RESET_TTL_MINUTES)));
+    return ok(c, { message: RESET_MESSAGE });
+  },
+);
+
+authRoutes.post("/reset-password", authLimit, async (c) => {
+  const input = await body(c, z.object({ token: z.string().trim().min(16).max(200), password }));
+  const db = c.env.DB;
+  const reset = await db
+    .prepare(
+      `SELECT r.id, r.user_id, r.expires_at, r.used_at, u.email, u.name, u.first_name FROM password_resets r JOIN users u ON u.id = r.user_id
+        WHERE r.token_hash = ? AND u.role = 'CUSTOMER' AND u.active = 1 AND u.deleted_at IS NULL`,
+    )
+    .bind(await sha256Hex(input.token))
+    .first<{ id: string; user_id: string; expires_at: number; used_at: number | null; email: string; name: string; first_name: string | null }>();
+  if (!reset || reset.used_at || reset.expires_at < Date.now()) {
+    throw badRequest("This reset link has expired or was already used. Please request a new one.", { token: "Expired or already used." });
+  }
+  const { hash, salt } = await hashPassword(input.password);
+  // Claim the token first (compare-and-set), so a link raced from two tabs changes the password once.
+  const claim = await db.prepare(`UPDATE password_resets SET used_at = ? WHERE id = ? AND used_at IS NULL AND expires_at > ?`).bind(Date.now(), reset.id, Date.now()).run();
+  if ((claim.meta.changes ?? 0) === 0) {
+    throw badRequest("This reset link has expired or was already used. Please request a new one.", { token: "Expired or already used." });
+  }
+  await db.batch([
+    db.prepare(`UPDATE users SET password_hash = ?, password_salt = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).bind(hash, salt, reset.user_id),
+    revokeAllStatement(db, reset.user_id),
+    clearFailuresStatement(db, `customer:${reset.email.toLowerCase()}`),
+    loginEventStatement(c, { userId: reset.user_id, kind: "CUSTOMER", event: "PASSWORD_RESET", email: reset.email }),
+    auditStatement(c, { action: "customer.password_reset", entityType: "user", targetId: reset.user_id, userId: reset.user_id }),
+  ]);
+  c.executionCtx.waitUntil(sendMail(c.get("config"), passwordChangedMail(reset.email, reset.first_name ?? reset.name.split(" ")[0] ?? "")));
+  return ok(c, { message: "Your password has been reset. Please sign in." });
 });
 
 /* Authenticated ------------------------------------------------------ */
@@ -218,6 +299,7 @@ authRoutes.post("/logout-all", async (c) => {
     revokeAllStatement(c.env.DB, auth.userId),
     revokeSessionStatement(c.env.DB, auth.sessionId),
     auditStatement(c, { action: "customer.logout_all", entityType: "user", targetId: auth.userId }),
+    loginEventStatement(c, { userId: auth.userId, kind: "CUSTOMER", event: "LOGOUT_ALL", email: auth.email }),
   ]);
   c.header("Set-Cookie", clearRefreshCookie("CUSTOMER"), { append: true });
   return ok(c, { message: "Signed out on every device." });
@@ -237,7 +319,9 @@ authRoutes.post("/change-password", rateLimit({ name: "change-password", limit: 
     revokeAllStatement(db, auth.userId),
     revokeSessionStatement(db, auth.sessionId),
     auditStatement(c, { action: "customer.change_password", entityType: "user", targetId: auth.userId }),
+    loginEventStatement(c, { userId: auth.userId, kind: "CUSTOMER", event: "PASSWORD_CHANGED", email: auth.email }),
   ]);
+  c.executionCtx.waitUntil(sendMail(c.get("config"), passwordChangedMail(auth.email, auth.name.split(" ")[0] ?? "")));
   c.header("Set-Cookie", clearRefreshCookie("CUSTOMER"), { append: true });
   return ok(c, { message: "Password changed. Please sign in again." });
 });
@@ -314,7 +398,7 @@ authRoutes.patch("/addresses/:id", async (c) => {
   const auth = currentUser(c);
   const db = c.env.DB;
   const existing = await findAddress(db, auth.userId, c.req.param("id"));
-  const input = await body(c, addressInput.partial());
+  const input = await body(c, addressPatch);
   const merged = {
     label: input.label ?? existing.label,
     fullName: input.fullName ?? existing.full_name,
@@ -326,6 +410,8 @@ authRoutes.patch("/addresses/:id", async (c) => {
     postalCode: input.postalCode ?? existing.postal_code,
     country: input.country ?? existing.country,
   };
+  const problems = addressProblems(merged);
+  if (problems) throw validationError(problems);
   await db.batch([
     ...(input.isDefault ? [db.prepare(`UPDATE addresses SET is_default = 0 WHERE user_id = ?`).bind(auth.userId)] : []),
     db

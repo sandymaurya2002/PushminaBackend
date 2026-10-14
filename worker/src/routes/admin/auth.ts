@@ -19,6 +19,7 @@ import { audit, auditStatement } from "../../lib/audit";
 import { burnPasswordCheck, hashPassword, verifyPassword } from "../../lib/crypto";
 import { badRequest, unauthorized } from "../../lib/errors";
 import { ok } from "../../lib/http";
+import { loginEventStatement, recordLoginEvent } from "../../lib/login-events";
 import { nowIso } from "../../lib/util";
 import { body, email, password } from "../../lib/validation";
 import { currentUser, requireAdmin } from "../../middleware/auth";
@@ -62,6 +63,7 @@ adminAuthRoutes.post("/login", rateLimit({ name: "admin-login", limit: 10, windo
   if (!user || !valid || !isAdmin || user.active !== 1 || user.deleted_at) {
     await recordFailure(db, lockKey);
     await audit(c, { action: "admin.login_failed", entityType: "user", targetId: user?.id ?? null, userId: null, metadata: { email: input.email } });
+    await recordLoginEvent(c, { userId: isAdmin ? user!.id : null, kind: "ADMIN", event: "LOGIN_FAILED", email: input.email });
     throw unauthorized("Incorrect email or password.");
   }
 
@@ -71,6 +73,7 @@ adminAuthRoutes.post("/login", rateLimit({ name: "admin-login", limit: 10, windo
     clearFailuresStatement(db, lockKey),
     db.prepare(`UPDATE users SET last_login_at = ? WHERE id = ?`).bind(nowIso(), user.id),
     auditStatement(c, { action: "admin.login", entityType: "user", targetId: user.id, userId: user.id }),
+    loginEventStatement(c, { userId: user.id, kind: "ADMIN", event: "LOGIN", email: user.email }),
   ]);
   withRefreshCookie(c, tokens.refreshToken);
   return ok(c, { admin: adminProfile(user), tokens: publicTokens(tokens) });
@@ -93,12 +96,16 @@ adminAuthRoutes.post("/refresh", rateLimit({ name: "admin-refresh", limit: 30, w
 adminAuthRoutes.post("/logout", async (c) => {
   const input = await body(c, refreshSchema).catch(() => ({}) as { refreshToken?: string });
   const token = input.refreshToken ?? readCookie(c, COOKIE.ADMIN.name);
-  if (token) await revokeByRefreshToken(c.env.DB, token, "ADMIN");
+  let userId = token ? await revokeByRefreshToken(c.env.DB, token, "ADMIN") : null;
   const bearer = bearerToken(c);
   if (bearer) {
     const auth = await authenticateAccessToken(c.env.DB, bearer, "ADMIN");
-    if (auth) await revokeSessionStatement(c.env.DB, auth.sessionId).run();
+    if (auth) {
+      await revokeSessionStatement(c.env.DB, auth.sessionId).run();
+      userId ??= auth.userId;
+    }
   }
+  if (userId) await recordLoginEvent(c, { userId, kind: "ADMIN", event: "LOGOUT" });
   c.header("Set-Cookie", clearRefreshCookie("ADMIN"), { append: true });
   return ok(c, { message: "Signed out." });
 });
@@ -122,6 +129,7 @@ adminAuthRoutes.post("/change-password", requireAdmin, rateLimit({ name: "admin-
     revokeAllStatement(db, auth.userId),
     revokeSessionStatement(db, auth.sessionId),
     auditStatement(c, { action: "admin.change_password", entityType: "user", targetId: auth.userId }),
+    loginEventStatement(c, { userId: auth.userId, kind: "ADMIN", event: "PASSWORD_CHANGED", email: auth.email }),
   ]);
   c.header("Set-Cookie", clearRefreshCookie("ADMIN"), { append: true });
   return ok(c, { message: "Password changed. Please sign in again." });

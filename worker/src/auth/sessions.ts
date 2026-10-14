@@ -159,12 +159,14 @@ export async function rotateRefreshToken(
   return { userId: session.user_id, tokens };
 }
 
-export async function revokeByRefreshToken(db: D1Database, refreshToken: string, kind: SessionKind): Promise<void> {
-  if (!refreshToken || refreshToken.length > 200) return;
-  await db
-    .prepare(`UPDATE sessions SET revoked_at = ? WHERE refresh_hash = ? AND kind = ? AND revoked_at IS NULL`)
+/** Revokes the session and returns whose it was (null when the token matched no live session). */
+export async function revokeByRefreshToken(db: D1Database, refreshToken: string, kind: SessionKind): Promise<string | null> {
+  if (!refreshToken || refreshToken.length > 200) return null;
+  const row = await db
+    .prepare(`UPDATE sessions SET revoked_at = ? WHERE refresh_hash = ? AND kind = ? AND revoked_at IS NULL RETURNING user_id`)
     .bind(Date.now(), await sha256Hex(refreshToken), kind)
-    .run();
+    .first<{ user_id: string }>();
+  return row?.user_id ?? null;
 }
 
 export function revokeSessionStatement(db: D1Database, sessionId: string): D1PreparedStatement {

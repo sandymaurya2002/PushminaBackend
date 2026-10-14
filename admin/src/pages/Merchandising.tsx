@@ -27,6 +27,7 @@ interface ProductRow {
   name: string
   slug: string
   price: number
+  priceUsd: number | null
   status: string
   isFeatured: boolean
   isTrending: boolean
@@ -182,6 +183,7 @@ export function Merchandising() {
                   <p className="truncate text-sm text-charcoal">{product.name}</p>
                   <p className="text-[0.6875rem] text-taupe">
                     {product.category.name} · {formatPrice(product.price)}
+                    {product.priceUsd !== null && ` · ${formatPrice(product.priceUsd, 'USD')}`}
                   </p>
                 </div>
 
@@ -260,7 +262,10 @@ export function Merchandising() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm text-charcoal">{product.name}</p>
-                      <p className="text-[0.6875rem] text-taupe">{formatPrice(product.price)}</p>
+                      <p className="text-[0.6875rem] text-taupe">
+                        {formatPrice(product.price)}
+                        {product.priceUsd !== null && ` · ${formatPrice(product.priceUsd, 'USD')}`}
+                      </p>
                     </div>
                     <button
                       type="button"

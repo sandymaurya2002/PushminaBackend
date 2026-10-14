@@ -22,7 +22,11 @@ interface Variant {
   colorId: string | null
   sizeId: string | null
   price: number
+  /** The India price matches the product's, so it moves when the product price is changed. */
+  followsPrice?: boolean
   compareAtPrice: number | null
+  /** International price override; null follows the product's USD price. */
+  priceUsd: number | null
   inventory: number
   isActive: boolean
 }
@@ -54,6 +58,8 @@ const EMPTY = {
   finish: '',
   price: '',
   compareAtPrice: '',
+  priceUsd: '',
+  compareAtPriceUsd: '',
   costPrice: '',
   status: 'DRAFT',
   isFeatured: false,
@@ -132,6 +138,8 @@ export function ProductForm() {
       finish: String((data.specifications as unknown as Array<{ label: string; value: string }>)?.find((s) => s.label === 'Finish')?.value ?? ''),
       price: String(data.price ?? ''),
       compareAtPrice: data.compareAtPrice ? String(data.compareAtPrice) : '',
+      priceUsd: data.priceUsd != null ? String(data.priceUsd) : '',
+      compareAtPriceUsd: data.compareAtPriceUsd != null ? String(data.compareAtPriceUsd) : '',
       costPrice: raw.costPrice ? String(raw.costPrice) : '',
       status: String(raw.status ?? 'DRAFT'),
       isFeatured: Boolean(data.isFeatured),
@@ -154,7 +162,12 @@ export function ProductForm() {
         colorId: variant.colorId ? String(variant.colorId) : null,
         sizeId: variant.sizeId ? String(variant.sizeId) : null,
         price: Number(variant.price),
+        followsPrice: Number(variant.price) === Number(data.price),
         compareAtPrice: variant.compareAtPrice ? Number(variant.compareAtPrice) : null,
+        priceUsd:
+          variant.priceUsd != null && Number(variant.priceUsd) !== Number(data.priceUsd)
+            ? Number(variant.priceUsd)
+            : null,
         inventory: Number(variant.inventory),
         isActive: Boolean(variant.isActive),
       })),
@@ -182,6 +195,9 @@ export function ProductForm() {
         finish: form.finish || null,
         price: Number(form.price),
         compareAtPrice: form.compareAtPrice ? Number(form.compareAtPrice) : null,
+        // Left out when blank so an older product without one keeps saving; required for new products.
+        priceUsd: form.priceUsd ? Number(form.priceUsd) : undefined,
+        compareAtPriceUsd: form.compareAtPriceUsd ? Number(form.compareAtPriceUsd) : null,
         costPrice: form.costPrice ? Number(form.costPrice) : null,
         status: form.status,
         isFeatured: form.isFeatured,
@@ -283,7 +299,9 @@ export function ProductForm() {
             colorId,
             sizeId,
             price: Number(form.price) || 0,
+            followsPrice: true,
             compareAtPrice: form.compareAtPrice ? Number(form.compareAtPrice) : null,
+            priceUsd: null,
             inventory: 0,
             isActive: true,
           },
@@ -332,6 +350,7 @@ export function ProductForm() {
                 save.isPending ||
                 !form.name ||
                 !form.price ||
+                (isNew && !form.priceUsd) ||
                 !form.categoryId ||
                 !form.materialId ||
                 !form.patternId
@@ -602,13 +621,22 @@ export function ProductForm() {
           <div className="space-y-6">
             <Card title="Pricing">
               <div className="space-y-4 p-5">
-                <Field label="Price (₹)" htmlFor="price" required>
+                <p className="text-[0.6875rem] uppercase tracking-[0.12em] text-taupe">India · INR</p>
+                <Field label="India price (₹ INR)" htmlFor="price" required hint="Shown to customers in India.">
                   <input
                     id="price"
                     type="number"
                     min="0"
                     value={form.price}
-                    onChange={(event) => setForm({ ...form, price: event.target.value })}
+                    onChange={(event) => {
+                      const price = event.target.value
+                      setForm({ ...form, price })
+                      setVariants(
+                        variants.map((entry) =>
+                          entry.followsPrice ? { ...entry, price: Number(price) || 0 } : entry,
+                        ),
+                      )
+                    }}
                     className="input"
                     disabled={readOnly}
                   />
@@ -630,6 +658,73 @@ export function ProductForm() {
                   />
                 </Field>
 
+                {form.price && form.compareAtPrice && Number(form.compareAtPrice) > Number(form.price) && (
+                  <p className="text-xs text-gold">
+                    {Math.round(
+                      ((Number(form.compareAtPrice) - Number(form.price)) /
+                        Number(form.compareAtPrice)) *
+                        100,
+                    )}
+                    % off — saving {formatPrice(Number(form.compareAtPrice) - Number(form.price))}
+                  </p>
+                )}
+
+                <div className="border-t border-line pt-4">
+                  <p className="text-[0.6875rem] uppercase tracking-[0.12em] text-taupe">International · USD</p>
+                </div>
+                <Field
+                  label="International price ($ USD)"
+                  htmlFor="price-usd"
+                  required
+                  hint="Shown to customers outside India. Enter it yourself; it is never converted from the rupee price."
+                >
+                  <input
+                    id="price-usd"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.priceUsd}
+                    onChange={(event) => setForm({ ...form, priceUsd: event.target.value })}
+                    className={cn('input', !isNew && !form.priceUsd && 'border-burgundy/40')}
+                    disabled={readOnly}
+                  />
+                </Field>
+                {!isNew && !form.priceUsd && (
+                  <p className="text-xs text-burgundy">
+                    No international price yet, so this product is hidden from customers outside India.
+                  </p>
+                )}
+
+                <Field
+                  label="Compare-at price ($)"
+                  htmlFor="compare-usd"
+                  hint="Optional. Must be higher than the international price."
+                >
+                  <input
+                    id="compare-usd"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.compareAtPriceUsd}
+                    onChange={(event) => setForm({ ...form, compareAtPriceUsd: event.target.value })}
+                    className="input"
+                    disabled={readOnly}
+                  />
+                </Field>
+
+                {form.priceUsd && form.compareAtPriceUsd && Number(form.compareAtPriceUsd) > Number(form.priceUsd) && (
+                  <p className="text-xs text-gold">
+                    {Math.round(
+                      ((Number(form.compareAtPriceUsd) - Number(form.priceUsd)) /
+                        Number(form.compareAtPriceUsd)) *
+                        100,
+                    )}
+                    % off — saving {formatPrice(Number(form.compareAtPriceUsd) - Number(form.priceUsd), 'USD')}
+                  </p>
+                )}
+
+                <div className="border-t border-line pt-4" />
+
                 <Field label="Cost price (₹)" htmlFor="cost" hint="Internal only. Never shown to customers.">
                   <input
                     id="cost"
@@ -641,17 +736,6 @@ export function ProductForm() {
                     disabled={readOnly}
                   />
                 </Field>
-
-                {form.price && form.compareAtPrice && Number(form.compareAtPrice) > Number(form.price) && (
-                  <p className="text-xs text-gold">
-                    {Math.round(
-                      ((Number(form.compareAtPrice) - Number(form.price)) /
-                        Number(form.compareAtPrice)) *
-                        100,
-                    )}
-                    % off — saving {formatPrice(Number(form.compareAtPrice) - Number(form.price))}
-                  </p>
-                )}
               </div>
             </Card>
 
@@ -871,13 +955,14 @@ export function ProductForm() {
               </p>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[44rem]">
+                <table className="w-full min-w-[50rem]">
                   <thead>
                     <tr>
                       <th className="th">SKU</th>
                       <th className="th">Colour</th>
                       <th className="th">Size</th>
-                      <th className="th text-right">Price</th>
+                      <th className="th text-right">Price (₹)</th>
+                      <th className="th text-right">Price ($)</th>
                       <th className="th text-right">Stock</th>
                       <th className="th text-center">Active</th>
                       <th className="th w-12" />
@@ -920,14 +1005,43 @@ export function ProductForm() {
                               setVariants(
                                 variants.map((entry, position) =>
                                   position === index
-                                    ? { ...entry, price: Number(event.target.value) }
+                                    ? {
+                                        ...entry,
+                                        price: Number(event.target.value),
+                                        followsPrice: Number(event.target.value) === Number(form.price),
+                                      }
                                     : entry,
                                 ),
                               )
                             }
                             className="input h-8 text-right"
                             disabled={readOnly}
-                            aria-label="Price"
+                            aria-label="India price"
+                          />
+                        </td>
+                        <td className="td">
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={variant.priceUsd ?? ''}
+                            placeholder={form.priceUsd || '—'}
+                            title="Leave blank to use the product's international price"
+                            onChange={(event) =>
+                              setVariants(
+                                variants.map((entry, position) =>
+                                  position === index
+                                    ? {
+                                        ...entry,
+                                        priceUsd: event.target.value === '' ? null : Number(event.target.value),
+                                      }
+                                    : entry,
+                                ),
+                              )
+                            }
+                            className="input h-8 text-right"
+                            disabled={readOnly}
+                            aria-label="International price"
                           />
                         </td>
                         <td className="td">

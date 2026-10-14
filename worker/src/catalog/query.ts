@@ -1,5 +1,6 @@
+import type { Currency } from "../commerce/currency";
 import type { Catalog, CollectionRow, ProductView } from "./model";
-import { inCollection, viewProduct } from "./model";
+import { basePrice, inCollection, pricedIn, viewProduct } from "./model";
 
 export const SORTS = ["featured", "newest", "price-low", "price-high", "best-selling"] as const;
 export type SortKey = (typeof SORTS)[number];
@@ -16,9 +17,18 @@ export interface ProductFilters {
   maxPrice?: number;
 }
 
-export function publishedViews(catalog: Catalog): ProductView[] {
-  return catalog.products.filter((row) => row.status === "PUBLISHED").map((row) => viewProduct(catalog, row));
+/**
+ * Published products. With a currency, only those that have a price in it:
+ * a product without an international price is not offered outside India.
+ */
+export function publishedViews(catalog: Catalog, currency?: Currency): ProductView[] {
+  return catalog.products
+    .filter((row) => row.status === "PUBLISHED" && (!currency || pricedIn(row, currency)))
+    .map((row) => viewProduct(catalog, row));
 }
+
+/** Price in major units of `currency` (callers only pass views priced in it). */
+const priceOf = (view: ProductView, currency: Currency) => (basePrice(view.row, currency) ?? 0) / 100;
 
 export function matchesSearch(view: ProductView, term: string): boolean {
   const needle = term.toLowerCase();
@@ -40,12 +50,12 @@ export function matchesSearch(view: ProductView, term: string): boolean {
   return needle.split(/\s+/).filter(Boolean).every((word) => haystack.includes(word));
 }
 
-export function applyFilters(views: ProductView[], filters: ProductFilters, catalog: Catalog): ProductView[] {
+export function applyFilters(views: ProductView[], filters: ProductFilters, catalog: Catalog, currency: Currency = "INR"): ProductView[] {
   const collectionIds = new Set(
     [...catalog.collections.values()].filter((collection) => filters.collection.includes(collection.slug)).map((collection) => collection.id),
   );
   const includeOutOfStock = filters.availability.includes("out-of-stock");
-  const price = (view: ProductView) => view.row.price_paise / 100;
+  const price = (view: ProductView) => priceOf(view, currency);
 
   return views.filter((view) => {
     if (filters.category.length && !filters.category.includes(view.category?.slug ?? "")) return false;
@@ -68,15 +78,16 @@ export function inCollectionScope(views: ProductView[], collection: CollectionRo
 const byName = (a: ProductView, b: ProductView) => a.row.name.localeCompare(b.row.name);
 const published = (view: ProductView) => Date.parse((view.row.published_at ?? view.row.created_at).replace(" ", "T")) || 0;
 
-export function sortViews(views: ProductView[], sort: SortKey): ProductView[] {
+export function sortViews(views: ProductView[], sort: SortKey, currency: Currency = "INR"): ProductView[] {
   const sorted = [...views];
+  const price = (view: ProductView) => priceOf(view, currency);
   switch (sort) {
     case "newest":
       return sorted.sort((a, b) => published(b) - published(a) || byName(a, b));
     case "price-low":
-      return sorted.sort((a, b) => a.row.price_paise - b.row.price_paise || byName(a, b));
+      return sorted.sort((a, b) => price(a) - price(b) || byName(a, b));
     case "price-high":
-      return sorted.sort((a, b) => b.row.price_paise - a.row.price_paise || byName(a, b));
+      return sorted.sort((a, b) => price(b) - price(a) || byName(a, b));
     case "best-selling":
       return sorted.sort((a, b) => b.row.sold_count - a.row.sold_count || b.row.popularity - a.row.popularity || byName(a, b));
     case "featured":
@@ -93,7 +104,7 @@ interface FacetOption {
 }
 
 /** Counts from the scope (collection/search), not the filtered result, so alternatives stay visible. */
-export function buildFacets(scope: ProductView[], catalog: Catalog) {
+export function buildFacets(scope: ProductView[], catalog: Catalog, currency: Currency = "INR") {
   const tally = new Map<string, Map<string, FacetOption>>();
   const add = (group: string, value: string | undefined, label: string | undefined, hex?: string | null) => {
     if (!value || !label) return;
@@ -109,7 +120,7 @@ export function buildFacets(scope: ProductView[], catalog: Catalog) {
   let min = Number.POSITIVE_INFINITY;
   let max = 0;
   for (const view of scope) {
-    const price = view.row.price_paise / 100;
+    const price = priceOf(view, currency);
     min = Math.min(min, price);
     max = Math.max(max, price);
     add("category", view.category?.slug, view.category?.name);
@@ -140,5 +151,6 @@ export function buildFacets(scope: ProductView[], catalog: Catalog) {
       { label: "Include Out of Stock", value: "out-of-stock", count: outOfStock },
     ],
     priceRange: { min: Number.isFinite(min) ? min : 0, max },
+    currency,
   };
 }

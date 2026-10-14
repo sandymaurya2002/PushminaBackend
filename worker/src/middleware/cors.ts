@@ -1,7 +1,7 @@
 import type { MiddlewareHandler } from "hono";
 import type { AppEnv } from "../types";
 
-const ALLOWED_HEADERS = "Content-Type, Authorization, Idempotency-Key, X-Requested-With";
+const ALLOWED_HEADERS = "Content-Type, Authorization, Idempotency-Key, X-Requested-With, X-Client-Country";
 const ALLOWED_METHODS = "GET, POST, PUT, PATCH, DELETE, OPTIONS";
 const EXPOSED_HEADERS = "Content-Disposition, Retry-After, X-Request-Id";
 

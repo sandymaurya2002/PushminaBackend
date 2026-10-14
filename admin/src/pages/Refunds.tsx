@@ -18,11 +18,12 @@ import {
   useToast,
 } from '@/components/ui'
 import { useAuth } from '@/lib/auth'
-import { formatDateTime, formatPrice } from '@/lib/utils'
+import { type Currency, formatDateTime, formatPrice } from '@/lib/utils'
 
 interface RefundRow {
   id: string
   amount: number
+  currency: Currency
   reason: string | null
   status: string
   notes: string | null
@@ -206,10 +207,10 @@ export function Refunds() {
                         <Badge className={TONE[refund.status]}>{refund.status}</Badge>
                       </td>
 
-                      <td className="td text-right text-charcoal">{formatPrice(refund.amount)}</td>
+                      <td className="td text-right text-charcoal">{formatPrice(refund.amount, refund.currency)}</td>
 
                       <td className="td">
-                        {refund.status === 'REQUESTED' && (
+                        {(refund.status === 'REQUESTED' || refund.status === 'FAILED') && (
                           <div className="flex justify-end gap-1.5">
                             {can('refunds.approve') && (
                               <button
@@ -260,7 +261,7 @@ export function Refunds() {
         danger={false}
         confirmLabel="Approve and refund"
         title="Approve this refund?"
-        message={`${formatPrice(approving?.amount ?? 0)} will be returned to the original payment method for order ${approving?.order.orderNumber}. This cannot be undone.`}
+        message={`${formatPrice(approving?.amount ?? 0, approving?.currency)} will be returned to the original payment method for order ${approving?.order.orderNumber}. This cannot be undone.`}
       />
 
       <Modal

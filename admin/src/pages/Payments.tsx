@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { CreditCard, Download, Search } from 'lucide-react'
@@ -14,7 +14,7 @@ import {
   useToast,
 } from '@/components/ui'
 import { useAuth } from '@/lib/auth'
-import { formatDateTime, formatPrice, PAYMENT_STATUS_TONE } from '@/lib/utils'
+import { type Currency, formatDateTime, formatPrice, PAYMENT_STATUS_TONE } from '@/lib/utils'
 
 interface PaymentRow {
   id: string
@@ -22,6 +22,7 @@ interface PaymentRow {
   method: string
   amount: number
   amountRefunded: number
+  currency: Currency
   provider: string
   providerPaymentId: string | null
   providerOrderId: string | null
@@ -48,6 +49,7 @@ export function Payments() {
     q: params.get('q') ?? undefined,
     status: params.get('status') ?? undefined,
     method: params.get('method') ?? undefined,
+    currency: params.get('currency') ?? undefined,
     from: params.get('from') ?? undefined,
     to: params.get('to') ?? undefined,
     page: Number(params.get('page') ?? 1),
@@ -82,11 +84,22 @@ export function Payments() {
     setParams(next)
   }
 
-  const byStatus = (data?.meta?.byStatus ?? []) as Array<{
-    status: string
-    count: number
-    amount: number
-  }>
+  const byStatus = useMemo(() => {
+    const entries = (data?.meta?.byStatus ?? []) as Array<{
+      status: string
+      currency: Currency
+      count: number
+      amount: number
+    }>
+    const grouped = new Map<string, { status: string; count: number; amounts: Array<[Currency, number]> }>()
+    for (const entry of entries) {
+      const group = grouped.get(entry.status) ?? { status: entry.status, count: 0, amounts: [] }
+      group.count += entry.count
+      group.amounts.push([entry.currency ?? 'INR', entry.amount])
+      grouped.set(entry.status, group)
+    }
+    return [...grouped.values()]
+  }, [data?.meta?.byStatus])
 
   return (
     <>
@@ -129,7 +142,9 @@ export function Payments() {
             >
               <p className="eyebrow text-taupe">{entry.status.replace(/_/g, ' ')}</p>
               <p className="mt-2 font-serif text-2xl text-charcoal">{entry.count}</p>
-              <p className="mt-1 text-xs text-mocha">{formatPrice(entry.amount)}</p>
+              <p className="mt-1 text-xs text-mocha">
+                {entry.amounts.map(([currency, amount]) => formatPrice(amount, currency)).join(' · ')}
+              </p>
             </button>
           ))}
         </div>
@@ -163,6 +178,17 @@ export function Payments() {
               {method}
             </option>
           ))}
+        </select>
+
+        <select
+          value={params.get('currency') ?? ''}
+          onChange={(event) => setFilter('currency', event.target.value)}
+          className="input w-auto"
+          aria-label="Filter by currency"
+        >
+          <option value="">All currencies</option>
+          <option value="INR">₹ INR</option>
+          <option value="USD">$ USD</option>
         </select>
 
         <input
@@ -249,10 +275,10 @@ export function Payments() {
                       </td>
 
                       <td className="td text-right">
-                        <span className="text-charcoal">{formatPrice(payment.amount)}</span>
+                        <span className="text-charcoal">{formatPrice(payment.amount, payment.currency)}</span>
                         {payment.amountRefunded > 0 && (
                           <span className="mt-0.5 block text-[0.6875rem] text-burgundy">
-                            −{formatPrice(payment.amountRefunded)} refunded
+                            −{formatPrice(payment.amountRefunded, payment.currency)} refunded
                           </span>
                         )}
                       </td>

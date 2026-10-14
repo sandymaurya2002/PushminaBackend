@@ -14,7 +14,16 @@ import {
   useToast,
 } from '@/components/ui'
 import { useAuth } from '@/lib/auth'
-import { formatPrice, ORDER_STATUS_TONE, PAYMENT_STATUS_TONE, relativeTime } from '@/lib/utils'
+import {
+  type Currency,
+  formatPrice,
+  ORDER_STATUS_TONE,
+  ORDER_STATUSES,
+  PAYMENT_STATUS_TONE,
+  PAYMENT_STATUSES,
+  relativeTime,
+  titleCase,
+} from '@/lib/utils'
 
 interface OrderRow {
   id: string
@@ -23,6 +32,7 @@ interface OrderRow {
   phone: string
   status: string
   total: number
+  currency: Currency
   placedAt: string
   trackingNumber: string | null
   shippingMethod: string
@@ -32,8 +42,6 @@ interface OrderRow {
   user: { id: string; firstName: string; lastName: string } | null
   items: Array<{ id: string; name: string; quantity: number; imageUrl: string | null }>
 }
-
-const STATUSES = ['PENDING', 'CONFIRMED', 'PACKED', 'SHIPPED', 'DELIVERED', 'CANCELLED']
 
 export function Orders() {
   const [params, setParams] = useSearchParams()
@@ -46,6 +54,7 @@ export function Orders() {
     q: params.get('q') ?? undefined,
     status: params.get('status') ?? undefined,
     paymentStatus: params.get('paymentStatus') ?? undefined,
+    currency: params.get('currency') ?? undefined,
     from: params.get('from') ?? undefined,
     to: params.get('to') ?? undefined,
     sort: params.get('sort') ?? 'newest',
@@ -128,9 +137,9 @@ export function Orders() {
           aria-label="Filter by order status"
         >
           <option value="">All statuses</option>
-          {STATUSES.map((status) => (
+          {ORDER_STATUSES.map((status) => (
             <option key={status} value={status}>
-              {status.charAt(0) + status.slice(1).toLowerCase()}
+              {titleCase(status)}
             </option>
           ))}
         </select>
@@ -142,9 +151,22 @@ export function Orders() {
           aria-label="Filter by payment status"
         >
           <option value="">Any payment</option>
-          <option value="UNPAID">Unpaid (cash on delivery)</option>
-          <option value="PAID">Paid</option>
-          <option value="REFUNDED">Refunded</option>
+          {PAYMENT_STATUSES.map((status) => (
+            <option key={status} value={status}>
+              {status === 'UNPAID' ? 'Unpaid (cash on delivery)' : titleCase(status)}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={params.get('currency') ?? ''}
+          onChange={(event) => setFilter('currency', event.target.value)}
+          className="input w-auto"
+          aria-label="Filter by currency"
+        >
+          <option value="">All currencies</option>
+          <option value="INR">India · ₹ INR</option>
+          <option value="USD">International · $ USD</option>
         </select>
 
         <input
@@ -227,7 +249,7 @@ export function Orders() {
                       <td className="td">
                         {order.paymentStatus ? (
                           <Badge className={PAYMENT_STATUS_TONE[order.paymentStatus]}>
-                            {order.paymentStatus}
+                            {titleCase(order.paymentStatus)}
                           </Badge>
                         ) : (
                           <span className="text-xs text-taupe">—</span>
@@ -240,10 +262,10 @@ export function Orders() {
                       </td>
 
                       <td className="td">
-                        <Badge className={ORDER_STATUS_TONE[order.status]}>{order.status}</Badge>
+                        <Badge className={ORDER_STATUS_TONE[order.status]}>{titleCase(order.status)}</Badge>
                       </td>
 
-                      <td className="td text-right text-charcoal">{formatPrice(order.total)}</td>
+                      <td className="td text-right text-charcoal">{formatPrice(order.total, order.currency)}</td>
                     </tr>
                   ))}
                 </tbody>

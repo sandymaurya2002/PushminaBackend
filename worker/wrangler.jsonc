@@ -29,9 +29,14 @@
     "ENABLE_COD_ORDERS": "false",
     "ACCESS_TOKEN_TTL_SECONDS": "900",
     "REFRESH_TOKEN_TTL_SECONDS": "2592000",
-    "ADMIN_REFRESH_TOKEN_TTL_SECONDS": "43200"
+    "ADMIN_REFRESH_TOKEN_TTL_SECONDS": "43200",
+    "STOREFRONT_URL": "https://www.pashmore.com",
+    "MAIL_FROM": "Pashmore <care@pashmore.com>"
   },
+  // Secrets (set with `wrangler secret put`, never committed): RAZORPAY_KEY_ID,
+  // RAZORPAY_KEY_SECRET, RAZORPAY_WEBHOOK_SECRET, RESEND_API_KEY, REVALIDATE_SECRET.
   "triggers": {
-    "crons": ["17 3 * * *"]
+    // Daily housekeeping, and the unpaid-order expiry sweep every 10 minutes.
+    "crons": ["17 3 * * *", "*/10 * * * *"]
   }
 }

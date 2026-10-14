@@ -116,7 +116,7 @@ export function Media() {
     <>
       <PageHeader
         title="Media library"
-        description="Images stored in the private R2 bucket. Only images marked public are served to the storefront. JPEG, PNG, WebP, AVIF or GIF, up to 10 MB."
+        description="Images and videos stored in the private R2 bucket. Only files marked public are served to the storefront. JPEG, PNG, WebP, AVIF or GIF up to 10 MB; MP4 or WebM video up to 40 MB, one at a time."
         actions={
           can('media.upload') && (
             <>
@@ -124,7 +124,7 @@ export function Media() {
                 ref={fileInput}
                 type="file"
                 multiple
-                accept="image/jpeg,image/png,image/webp,image/avif,image/gif"
+                accept="image/jpeg,image/png,image/webp,image/avif,image/gif,video/mp4,video/webm"
                 className="hidden"
                 onChange={(event) => {
                   if (event.target.files?.length) uploadMutation.mutate(event.target.files)
@@ -206,6 +206,16 @@ export function Media() {
                         alt={asset.alt ?? ''}
                         loading="lazy"
                         className="h-full w-full object-cover"
+                      />
+                    ) : asset.mimeType.startsWith('video/') ? (
+                      <video
+                        src={asset.url}
+                        muted
+                        playsInline
+                        preload="metadata"
+                        className="h-full w-full object-cover"
+                        onMouseEnter={(event) => void event.currentTarget.play().catch(() => undefined)}
+                        onMouseLeave={(event) => event.currentTarget.pause()}
                       />
                     ) : (
                       <div className="flex h-full items-center justify-center text-taupe">

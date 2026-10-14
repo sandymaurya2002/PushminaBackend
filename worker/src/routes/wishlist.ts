@@ -56,7 +56,7 @@ wishlistRoutes.get("/", async (c) => {
     results
       .map((row) => byId.get(row.product_id))
       .filter(Boolean)
-      .map((row) => publicProduct(viewProduct(catalog, row!), catalog, resolve, "card")),
+      .map((row) => publicProduct(viewProduct(catalog, row!), catalog, resolve, "card", c.get("currency"))),
   );
 });
 

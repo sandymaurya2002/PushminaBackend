@@ -4,15 +4,19 @@ export function cn(...inputs: ClassValue[]): string {
   return clsx(inputs)
 }
 
-const inr = new Intl.NumberFormat('en-IN', {
-  style: 'currency',
-  currency: 'INR',
-  maximumFractionDigits: 0,
-})
+/** India is priced in rupees, every other country in dollars; the two are entered separately, never converted. */
+export type Currency = 'INR' | 'USD'
+export const CURRENCIES: Currency[] = ['INR', 'USD']
+export const CURRENCY_SYMBOL: Record<Currency, string> = { INR: '₹', USD: '$' }
 
-export function formatPrice(value: number | string | null | undefined): string {
+const formatters: Record<Currency, Intl.NumberFormat> = {
+  INR: new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }),
+  USD: new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 2 }),
+}
+
+export function formatPrice(value: number | string | null | undefined, currency: Currency | string = 'INR'): string {
   if (value === null || value === undefined) return '—'
-  return inr.format(Number(value))
+  return (formatters[currency as Currency] ?? formatters.INR).format(Number(value))
 }
 
 export function formatNumber(value: number): string {
@@ -92,16 +96,47 @@ export function debounce<T extends (...args: never[]) => void>(fn: T, delay = 30
 
 export const ORDER_STATUS_TONE: Record<string, string> = {
   PENDING: 'border-line-strong text-mocha',
+  PAYMENT_PENDING: 'border-line-strong text-taupe',
+  PAYMENT_FAILED: 'border-burgundy/40 text-burgundy',
+  PAID: 'border-gold/50 text-gold',
   CONFIRMED: 'border-gold/50 text-gold',
+  PROCESSING: 'border-gold/50 text-gold',
   PACKED: 'border-gold/50 text-gold',
   SHIPPED: 'border-gold/50 text-gold',
+  OUT_FOR_DELIVERY: 'border-gold/50 text-gold',
   DELIVERED: 'border-success/40 text-success',
   CANCELLED: 'border-burgundy/40 text-burgundy',
+  RETURN_REQUESTED: 'border-burgundy/40 text-burgundy',
+  RETURNED: 'border-line-strong text-mocha',
+  REFUND_PENDING: 'border-burgundy/40 text-burgundy',
+  REFUNDED: 'border-line-strong text-mocha',
 }
+
+/** Every order status, in lifecycle order, for filters. */
+export const ORDER_STATUSES = [
+  'PENDING',
+  'PAYMENT_PENDING',
+  'PAYMENT_FAILED',
+  'PAID',
+  'CONFIRMED',
+  'PROCESSING',
+  'PACKED',
+  'SHIPPED',
+  'OUT_FOR_DELIVERY',
+  'DELIVERED',
+  'CANCELLED',
+  'RETURN_REQUESTED',
+  'RETURNED',
+  'REFUND_PENDING',
+  'REFUNDED',
+] as const
+
+export const PAYMENT_STATUSES = ['UNPAID', 'PENDING', 'PAID', 'FAILED', 'REFUND_PENDING', 'PARTIALLY_REFUNDED', 'REFUNDED'] as const
 
 export const PAYMENT_STATUS_TONE: Record<string, string> = {
   UNPAID: 'border-line-strong text-mocha',
   PAID: 'border-success/40 text-success',
+  REFUND_PENDING: 'border-burgundy/40 text-burgundy',
   CREATED: 'border-line-strong text-taupe',
   PENDING: 'border-line-strong text-mocha',
   AUTHORIZED: 'border-gold/50 text-gold',

@@ -95,5 +95,31 @@ export function sniffImage(bytes: Uint8Array): SniffedImage | null {
   return { mime, ext: IMAGE_TYPES[mime], width, height };
 }
 
-export const MEDIA_FOLDERS = ["products", "collections", "categories", "banners", "misc"] as const;
-export const MEDIA_KEY_PATTERN = /^(products|collections|categories|banners|misc)\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png|webp|avif|gif)$/;
+export const VIDEO_TYPES = {
+  "video/mp4": "mp4",
+  "video/webm": "webm",
+} as const;
+
+export type VideoMime = keyof typeof VIDEO_TYPES;
+export const MAX_VIDEO_BYTES = 40 * 1024 * 1024;
+
+export interface SniffedVideo {
+  mime: VideoMime;
+  ext: string;
+}
+
+const MP4_BRANDS = /^(isom|iso[2-9]|mp41|mp42|avc1|M4V |M4VH|M4VP|dash|mmp4|qt  )$/;
+
+/** Identifies MP4 (ISO base media) and WebM from their headers. */
+export function sniffVideo(bytes: Uint8Array): SniffedVideo | null {
+  if (bytes.length < 32) return null;
+  if (ascii(bytes, 4, 4) === "ftyp" && MP4_BRANDS.test(ascii(bytes, 8, 4))) return { mime: "video/mp4", ext: "mp4" };
+  if (bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3 && ascii(bytes, 0, Math.min(64, bytes.length)).includes("webm")) {
+    return { mime: "video/webm", ext: "webm" };
+  }
+  return null;
+}
+
+export const MEDIA_FOLDERS = ["products", "collections", "categories", "banners", "videos", "misc"] as const;
+export const MEDIA_KEY_PATTERN =
+  /^(products|collections|categories|banners|videos|misc)\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png|webp|avif|gif|mp4|webm)$/;

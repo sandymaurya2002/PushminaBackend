@@ -13,7 +13,8 @@ import {
   useToast,
 } from '@/components/ui'
 import { useAuth } from '@/lib/auth'
-import { formatDate, formatDateTime, formatPrice, ORDER_STATUS_TONE } from '@/lib/utils'
+import { type Currency, formatDate, formatDateTime, formatPrice, ORDER_STATUS_TONE, titleCase } from '@/lib/utils'
+import { describeAgent, LOGIN_EVENT_TONE, type LoginEventEntry } from '@/pages/LoginActivity'
 
 interface CustomerDetailData {
   id: string
@@ -43,10 +44,15 @@ interface CustomerDetailData {
     id: string
     orderNumber: string
     status: string
+    paymentStatus: string
+    paymentMethod: string
     total: number
+    currency: Currency
     placedAt: string
     items: Array<{ name: string; quantity: number }>
   }>
+  /** Null when the viewer lacks `customers.activity`. */
+  loginActivity: LoginEventEntry[] | null
   reviews: Array<{
     id: string
     rating: number
@@ -55,7 +61,13 @@ interface CustomerDetailData {
     product: { slug: string; name: string }
   }>
   wishlistItems: Array<{ id: string; product: { slug: string; name: string } }>
-  stats: { lifetimeSpend: number; paidOrders: number; averageOrderValue: number }
+  stats: {
+    lifetimeSpend: number
+    lifetimeSpendUsd: number
+    paidOrders: number
+    averageOrderValue: number
+    averageOrderValueUsd: number
+  }
 }
 
 export function CustomerDetail() {
@@ -126,6 +138,9 @@ export function CustomerDetail() {
           <p className="mt-2 font-serif text-2xl text-charcoal">
             {formatPrice(data.stats.lifetimeSpend)}
           </p>
+          {data.stats.lifetimeSpendUsd > 0 && (
+            <p className="mt-1 text-sm text-mocha">+ {formatPrice(data.stats.lifetimeSpendUsd, 'USD')}</p>
+          )}
         </div>
         <div className="card p-5">
           <p className="eyebrow text-taupe">Paid orders</p>
@@ -136,6 +151,9 @@ export function CustomerDetail() {
           <p className="mt-2 font-serif text-2xl text-charcoal">
             {formatPrice(data.stats.averageOrderValue)}
           </p>
+          {data.stats.averageOrderValueUsd > 0 && (
+            <p className="mt-1 text-sm text-mocha">{formatPrice(data.stats.averageOrderValueUsd, 'USD')} international</p>
+          )}
         </div>
       </div>
 
@@ -155,17 +173,57 @@ export function CustomerDetail() {
                       {order.orderNumber}
                     </Link>
                     <span className="flex-1 truncate text-xs text-taupe">
+                      {formatDate(order.placedAt)} ·{' '}
                       {order.items.map((item) => `${item.name} ×${item.quantity}`).join(', ')}
                     </span>
-                    <Badge className={ORDER_STATUS_TONE[order.status]}>{order.status}</Badge>
+                    <span className="hidden text-[0.6875rem] text-taupe sm:inline">
+                      {order.paymentMethod === 'COD' ? 'COD' : 'Online'} ·{' '}
+                      {titleCase(order.paymentStatus).toLowerCase()}
+                    </span>
+                    <Badge className={ORDER_STATUS_TONE[order.status]}>{titleCase(order.status)}</Badge>
                     <span className="shrink-0 text-sm text-charcoal">
-                      {formatPrice(order.total)}
+                      {formatPrice(order.total, order.currency)}
                     </span>
                   </li>
                 ))}
               </ul>
             )}
           </Card>
+
+          {data.loginActivity && (
+            <Card
+              title="Login activity"
+              actions={
+                <Link
+                  to={`/login-activity?q=${encodeURIComponent(data.email)}`}
+                  className="text-[0.6875rem] uppercase tracking-[0.1em] text-taupe hover:text-charcoal"
+                >
+                  View all
+                </Link>
+              }
+            >
+              {data.loginActivity.length === 0 ? (
+                <p className="px-5 py-8 text-center text-sm text-taupe">No sign-ins recorded yet.</p>
+              ) : (
+                <ul className="divide-y divide-line">
+                  {data.loginActivity.map((entry) => (
+                    <li key={entry.id} className="flex flex-wrap items-center gap-3 px-5 py-3">
+                      <Badge className={LOGIN_EVENT_TONE[entry.event] ?? 'border-line-strong text-mocha'}>
+                        {titleCase(entry.event)}
+                      </Badge>
+                      <span className="flex-1 truncate text-xs text-mocha" title={entry.userAgent ?? undefined}>
+                        {describeAgent(entry.userAgent)}
+                        {entry.ip && <span className="ml-2 font-mono text-taupe">{entry.ip}</span>}
+                      </span>
+                      <span className="shrink-0 text-[0.6875rem] text-taupe">
+                        {formatDateTime(entry.createdAt)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+          )}
 
           {data.reviews.length > 0 && (
             <Card title="Reviews">
@@ -191,6 +249,24 @@ export function CustomerDetail() {
         <div className="space-y-6">
           <Card title="Details">
             <dl className="space-y-3 px-5 py-4 text-sm">
+              <div>
+                <dt className="eyebrow text-taupe">Account status</dt>
+                <dd className="mt-0.5">
+                  <Badge
+                    className={
+                      data.status === 'BLOCKED'
+                        ? 'border-burgundy/40 text-burgundy'
+                        : 'border-success/40 text-success'
+                    }
+                  >
+                    {titleCase(data.status)}
+                  </Badge>
+                </dd>
+              </div>
+              <div>
+                <dt className="eyebrow text-taupe">Registered</dt>
+                <dd className="mt-0.5 text-charcoal">{formatDateTime(data.createdAt)}</dd>
+              </div>
               <div>
                 <dt className="eyebrow text-taupe">Email</dt>
                 <dd className="mt-0.5 break-all text-charcoal">{data.email}</dd>

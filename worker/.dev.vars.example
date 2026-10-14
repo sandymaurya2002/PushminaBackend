@@ -1,6 +1,26 @@
 # Copy to .dev.vars for `wrangler dev`. Overrides the vars in wrangler.jsonc locally only.
+# Never commit .dev.vars: it holds secrets.
 FRONTEND_ORIGIN=http://localhost:3000
 ADMIN_ORIGIN=http://localhost:5173
-ENABLE_COD_ORDERS=false
+STOREFRONT_URL=http://localhost:3000
+ENABLE_COD_ORDERS=true
 # Only needed when testing the Node gateway locally; must match its GATEWAY_SECRET.
 GATEWAY_SECRET=
+
+# Razorpay TEST-mode keys (Dashboard → Account & Settings → API Keys, with "Test Mode" on).
+# Keys starting rzp_test_ never move real money. Online payment is offered only when both are set.
+RAZORPAY_KEY_ID=
+RAZORPAY_KEY_SECRET=
+# Webhook secret you chose when adding the webhook (Dashboard → Webhooks) pointing at
+# <worker-url>/api/v1/payments/razorpay/webhook. Required for webhooks to be accepted.
+RAZORPAY_WEBHOOK_SECRET=
+
+# Transactional email (order confirmations, status updates, password resets) through Resend.
+RESEND_API_KEY=
+MAIL_FROM=Pashmore <care@pashmore.com>
+# Prints emails, including password-reset links, to the wrangler console instead of dropping them.
+# Local development only.
+EMAIL_DEV_LOG=true
+
+# Must equal REVALIDATE_SECRET in the storefront's .env.local so admin edits refresh the site at once.
+REVALIDATE_SECRET=

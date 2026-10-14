@@ -2,18 +2,29 @@ import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
+  BarChart3,
   Boxes,
   ChevronDown,
+  CreditCard,
   FileText,
+  Globe,
   Image,
+  KeyRound,
   LayoutDashboard,
+  LayoutTemplate,
   LogOut,
+  Mail,
   Menu,
+  MessageSquare,
   Package,
   Palette,
+  Search,
+  Settings,
   ShieldCheck,
   ShoppingBag,
   Star,
+  Ticket,
+  Undo2,
   Users,
   X,
 } from 'lucide-react'
@@ -27,7 +38,7 @@ interface NavEntry {
   icon: typeof LayoutDashboard
   /** Hidden entirely when the signed-in role lacks this permission. */
   permission?: string
-  badgeKey?: 'orders' | 'stock'
+  badgeKey?: 'orders' | 'stock' | 'refunds' | 'contact'
 }
 
 interface NavGroup {
@@ -36,9 +47,8 @@ interface NavGroup {
 }
 
 /**
- * Only modules the Cloudflare API implements. Payments, refunds, discounts,
- * reviews, CMS content, blog, SEO, notifications, enquiries, newsletter and
- * settings are not migrated yet; their API routes answer 501.
+ * Only modules the Cloudflare API implements. Reviews, blog and notifications
+ * are not migrated yet; their API routes answer 501.
  */
 const NAV: NavGroup[] = [
   {
@@ -59,7 +69,28 @@ const NAV: NavGroup[] = [
     title: 'Sales',
     entries: [
       { label: 'Orders', to: '/orders', icon: ShoppingBag, permission: 'orders.view', badgeKey: 'orders' },
+      { label: 'Payments', to: '/payments', icon: CreditCard, permission: 'payments.view' },
+      { label: 'Refunds', to: '/refunds', icon: Undo2, permission: 'refunds.view', badgeKey: 'refunds' },
+      { label: 'Coupons', to: '/coupons', icon: Ticket, permission: 'discounts.view' },
       { label: 'Customers', to: '/customers', icon: Users, permission: 'customers.view' },
+      { label: 'Login Activity', to: '/login-activity', icon: KeyRound, permission: 'customers.activity' },
+      { label: 'Reports', to: '/reports', icon: BarChart3, permission: 'reports.view' },
+    ],
+  },
+  {
+    title: 'Website',
+    entries: [
+      { label: 'Homepage & Banners', to: '/content', icon: LayoutTemplate, permission: 'banners.view' },
+      { label: 'Pages', to: '/pages', icon: Globe, permission: 'content.view' },
+      { label: 'SEO & Redirects', to: '/seo', icon: Search, permission: 'seo.view' },
+      { label: 'Store Settings', to: '/settings', icon: Settings, permission: 'settings.view' },
+    ],
+  },
+  {
+    title: 'Customers',
+    entries: [
+      { label: 'Enquiries', to: '/contact', icon: MessageSquare, permission: 'contact.view', badgeKey: 'contact' },
+      { label: 'Newsletter', to: '/newsletter', icon: Mail, permission: 'newsletter.view' },
     ],
   },
   {
@@ -95,10 +126,11 @@ export function Layout() {
         ? await api.get<Record<string, number>>('/admin/dashboard/order-stats').catch(() => ({ data: {} as Record<string, number> }))
         : { data: {} as Record<string, number> }
 
-      // Orders still needing action before they ship.
       return {
-        orders: (stats.PENDING ?? 0) + (stats.CONFIRMED ?? 0) + (stats.PACKED ?? 0),
+        orders: stats.toFulfil ?? 0,
         stock: stats.lowStock ?? 0,
+        refunds: stats.pendingRefunds ?? 0,
+        contact: stats.newContactSubmissions ?? 0,
       }
     },
     refetchInterval: 60_000,

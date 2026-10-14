@@ -124,9 +124,12 @@ describe("customer login, sessions and logout", () => {
     expect(invalid.status).toBe(422);
   });
 
-  it("blocks forgot-password honestly rather than pretending to send email", async () => {
-    const result = await call("/api/v1/auth/forgot-password", { body: { email: uniqueEmail() } });
-    expect(result.status).toBe(501);
+  it("answers forgot-password the same way whether or not the account exists", async () => {
+    const unknown = await call("/api/v1/auth/forgot-password", { body: { email: uniqueEmail() } });
+    const known = await call("/api/v1/auth/forgot-password", { body: { email: (await registerCustomer()).email } });
+    expect(unknown.status).toBe(200);
+    expect(known.status).toBe(200);
+    expect(known.json.data).toEqual(unknown.json.data);
   });
 });
 

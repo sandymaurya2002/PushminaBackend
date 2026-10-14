@@ -31,6 +31,7 @@ interface CustomerRow {
   reviewCount: number
   wishlistCount: number
   lifetimeSpend: number
+  lifetimeSpendUsd: number
 }
 
 export function Customers() {
@@ -191,6 +192,11 @@ export function Customers() {
 
                       <td className="td text-right text-charcoal">
                         {formatPrice(customer.lifetimeSpend)}
+                        {customer.lifetimeSpendUsd > 0 && (
+                          <span className="block text-xs text-mocha">
+                            + {formatPrice(customer.lifetimeSpendUsd, 'USD')}
+                          </span>
+                        )}
                       </td>
 
                       <td className="td">

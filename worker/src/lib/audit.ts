@@ -24,21 +24,38 @@ function scrub(value: unknown, depth = 0): unknown {
   return value;
 }
 
+/** Who did something, for code that also runs outside a request (webhooks, scheduled jobs). */
+export interface Actor {
+  db: D1Database;
+  actorId: string | null;
+  ip?: string | null;
+  userAgent?: string | null;
+}
+
+export function actorFrom(c: Context<AppEnv>): Actor {
+  return { db: c.env.DB, actorId: c.get("auth")?.userId ?? null, ip: c.get("clientIp") ?? null, userAgent: c.get("userAgent") ?? null };
+}
+
+export function actorAuditStatement(actor: Actor, input: AuditInput): D1PreparedStatement {
+  return actor.db
+    .prepare(
+      `INSERT INTO audit_events (id, user_id, action, entity_type, target_id, metadata_json, ip, user_agent)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .bind(
+      newId(),
+      input.userId === undefined ? actor.actorId : input.userId,
+      input.action,
+      input.entityType ?? null,
+      input.targetId ?? null,
+      JSON.stringify(scrub(input.metadata ?? {})),
+      actor.ip ?? null,
+      actor.userAgent ?? null,
+    );
+}
+
 export function auditStatement(c: Context<AppEnv>, input: AuditInput): D1PreparedStatement {
-  const auth = c.get("auth");
-  return c.env.DB.prepare(
-    `INSERT INTO audit_events (id, user_id, action, entity_type, target_id, metadata_json, ip, user_agent)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).bind(
-    newId(),
-    input.userId === undefined ? auth?.userId ?? null : input.userId,
-    input.action,
-    input.entityType ?? null,
-    input.targetId ?? null,
-    JSON.stringify(scrub(input.metadata ?? {})),
-    c.get("clientIp") ?? null,
-    c.get("userAgent") ?? null,
-  );
+  return actorAuditStatement(actorFrom(c), input);
 }
 
 /** Audit logging must never break the request it describes. */

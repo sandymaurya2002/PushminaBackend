@@ -1,4 +1,5 @@
 import type { MiddlewareHandler } from "hono";
+import { resolvePricing } from "../commerce/currency";
 import { readConfig } from "../env";
 import { timingSafeEqual } from "../lib/crypto";
 import type { AppEnv } from "../types";
@@ -26,5 +27,8 @@ export const requestContext: MiddlewareHandler<AppEnv> = async (c, next) => {
   }
   c.set("clientIp", ip);
   c.set("userAgent", (c.req.header("user-agent") ?? "").slice(0, 300));
+  const pricing = resolvePricing(c);
+  c.set("currency", pricing.currency);
+  c.set("country", pricing.country);
   await next();
 };

@@ -81,7 +81,10 @@ export function Seo() {
   })
 
   const saveEntry = useMutation({
-    mutationFn: async (entry: SeoEntry) => api.put('/admin/seo', entry),
+    mutationFn: async (entry: SeoEntry) => {
+      const { id, updatedAt: _updatedAt, ...rest } = entry
+      return api.put('/admin/seo', id ? { id, ...rest } : rest)
+    },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin-seo'] })
       setEditing(null)
@@ -116,19 +119,53 @@ export function Seo() {
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['admin-redirects'] }),
   })
 
+  const removeEntry = useMutation({
+    mutationFn: async (id: string) => api.delete(`/admin/seo/${id}`),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-seo'] })
+      toast({ title: 'Override removed', description: 'The page uses its own defaults again.' })
+    },
+    onError: (caught) =>
+      toast({
+        title: 'Could not remove',
+        description: caught instanceof ApiError ? caught.message : 'Unexpected error.',
+        tone: 'error',
+      }),
+  })
+
+  const newEntry = (): SeoEntry => ({
+    id: '',
+    entityType: 'PAGE',
+    entityId: null,
+    path: '/',
+    title: '',
+    description: '',
+    keywords: [],
+    canonicalUrl: null,
+    ogImageUrl: null,
+    robotsIndex: true,
+    robotsFollow: true,
+    updatedAt: '',
+  })
+
   return (
     <>
       <PageHeader
         title="SEO"
         description="Titles, descriptions, canonical URLs and robots directives. Anything left blank falls back to the page's own content."
         actions={
-          tab === 'redirects' &&
-          can('seo.update') && (
+          can('seo.update') &&
+          (tab === 'redirects' ? (
             <button type="button" onClick={() => setAddingRedirect(true)} className="btn-primary">
               <Plus className="h-3.5 w-3.5" strokeWidth={2} />
               New redirect
             </button>
-          )
+          ) : tab === 'entries' ? (
+            <button type="button" onClick={() => setEditing(newEntry())} className="btn-primary">
+              <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+              New override
+            </button>
+          ) : null)
         }
       />
 
@@ -168,16 +205,20 @@ export function Seo() {
               <table className="w-full min-w-[44rem]">
                 <thead>
                   <tr>
+                    <th className="th">Path</th>
                     <th className="th">Type</th>
                     <th className="th">Title</th>
                     <th className="th">Description</th>
                     <th className="th">Robots</th>
-                    <th className="th w-16 text-right">Edit</th>
+                    <th className="th w-28 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {entries.data.map((entry) => (
                     <tr key={entry.id} className="transition-colors hover:bg-cream/40">
+                      <td className="td">
+                        <code className="text-[0.6875rem] text-mocha">{entry.path}</code>
+                      </td>
                       <td className="td">
                         <Badge className="border-line-strong text-mocha">
                           {titleCase(entry.entityType)}
@@ -204,13 +245,24 @@ export function Seo() {
                       </td>
                       <td className="td text-right">
                         {can('seo.update') && (
-                          <button
-                            type="button"
-                            onClick={() => setEditing(entry)}
-                            className="text-[0.6875rem] uppercase tracking-[0.1em] text-taupe hover:text-charcoal"
-                          >
-                            Edit
-                          </button>
+                          <div className="flex justify-end gap-3">
+                            <button
+                              type="button"
+                              onClick={() => setEditing(entry)}
+                              className="text-[0.6875rem] uppercase tracking-[0.1em] text-taupe hover:text-charcoal"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removeEntry.mutate(entry.id)}
+                              disabled={removeEntry.isPending}
+                              aria-label={`Remove override for ${entry.path}`}
+                              className="text-taupe hover:text-burgundy"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" strokeWidth={1.5} />
+                            </button>
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -339,7 +391,7 @@ export function Seo() {
         open={Boolean(editing)}
         onClose={() => setEditing(null)}
         wide
-        title="Edit SEO"
+        title={editing?.id ? 'Edit SEO' : 'New SEO override'}
         footer={
           <>
             <button type="button" onClick={() => setEditing(null)} className="btn-ghost">
@@ -359,6 +411,32 @@ export function Seo() {
       >
         {editing && (
           <div className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-[2fr_1fr]">
+              <Field label="Page path" htmlFor="s-path" required hint="The storefront address, e.g. /collections/pure-pashmina or /about.">
+                <input
+                  id="s-path"
+                  value={editing.path ?? ''}
+                  onChange={(event) => setEditing({ ...editing, path: event.target.value })}
+                  className="input font-mono"
+                  placeholder="/collections/pure-pashmina"
+                />
+              </Field>
+              <Field label="Page type" htmlFor="s-type">
+                <select
+                  id="s-type"
+                  value={editing.entityType}
+                  onChange={(event) => setEditing({ ...editing, entityType: event.target.value })}
+                  className="input"
+                >
+                  {['PAGE', 'PRODUCT', 'COLLECTION', 'CATEGORY', 'OTHER'].map((type) => (
+                    <option key={type} value={type}>
+                      {titleCase(type)}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+
             <Field
               label="Meta title"
               htmlFor="s-title"
@@ -427,7 +505,7 @@ export function Seo() {
                 {(editing.title?.length ?? 0) > 60 && '…'}
               </p>
               <p className="mt-0.5 text-xs text-[#006621]">
-                {editing.canonicalUrl ?? 'https://www.pushmina.com/…'}
+                {editing.canonicalUrl || `https://www.pashmore.com${editing.path ?? ''}`}
               </p>
               <p className="mt-1 text-[0.8125rem] leading-snug text-[#545454]">
                 {(editing.description ?? 'No description set.').slice(0, 158)}

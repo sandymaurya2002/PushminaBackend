@@ -1,5 +1,6 @@
 import type { Config, Env } from "./env";
 import type { AdminRoleKey } from "./auth/permissions";
+import type { Currency } from "./commerce/currency";
 
 export interface AuthContext {
   userId: string;
@@ -16,6 +17,10 @@ export interface AppVariables {
   requestId: string;
   clientIp: string;
   userAgent: string;
+  /** The price list this request is served from (see commerce/currency). */
+  currency: Currency;
+  /** The shopper's country, when known. */
+  country: string | null;
   auth?: AuthContext;
 }
 

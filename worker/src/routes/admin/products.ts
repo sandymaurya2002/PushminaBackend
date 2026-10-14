@@ -26,6 +26,9 @@ const variantSchema = z.object({
   sizeId: optionalId,
   price: money.nullable().optional(),
   compareAtPrice: money.nullable().optional(),
+  /** Omitted: keep the stored value (null for a new variant). Null or equal to the product's USD price: follow the product. */
+  priceUsd: money.nullable().optional(),
+  compareAtPriceUsd: money.nullable().optional(),
   inventory: z.coerce.number().int().min(0).max(1_000_000).default(0),
   isActive: z.boolean().default(true),
 });
@@ -67,8 +70,15 @@ export const productSchema = z.object({
   countryOfOrigin: z.string().trim().max(80).default("India"),
   weight: z.string().trim().max(80).nullable().optional(),
   finish: z.string().trim().max(80).nullable().optional(),
+  /** India price, in rupees. */
   price: money,
   compareAtPrice: money.nullable().optional(),
+  /**
+   * International price, in US dollars, entered separately (never converted).
+   * Required when creating; omitted on update keeps the stored value.
+   */
+  priceUsd: money.optional(),
+  compareAtPriceUsd: money.nullable().optional(),
   costPrice: money.nullable().optional(),
   status: z.enum(["DRAFT", "PUBLISHED", "ARCHIVED"]).default("DRAFT"),
   isFeatured: z.boolean().default(false),
@@ -119,8 +129,21 @@ function productJson(input: ProductInput, previous?: string): string {
   });
 }
 
+/** USD prices in cents after applying the input to what is stored (omitted fields keep their stored values). */
+function usdPrices(input: ProductInput, existing?: ProductView["row"]) {
+  return {
+    price: input.priceUsd !== undefined ? toPaise(input.priceUsd) : (existing?.price_usd_cents ?? null),
+    compareAt:
+      input.compareAtPriceUsd !== undefined
+        ? input.compareAtPriceUsd
+          ? toPaise(input.compareAtPriceUsd)
+          : null
+        : (existing?.compare_at_price_usd_cents ?? null),
+  };
+}
+
 /** Rejects references to taxonomy, categories, collections or products that do not exist. */
-async function validateReferences(db: D1Database, input: ProductInput, selfId?: string) {
+async function validateReferences(db: D1Database, input: ProductInput, selfId?: string, existing?: ProductView["row"]) {
   const termIds = [
     ...input.colorIds,
     ...input.sizeIds,
@@ -172,6 +195,11 @@ async function validateReferences(db: D1Database, input: ProductInput, selfId?: 
   if (input.compareAtPrice != null && input.compareAtPrice > 0 && input.compareAtPrice <= input.price) {
     errors.compareAtPrice = "Compare-at price must be higher than the price.";
   }
+  if (!selfId && input.priceUsd === undefined) errors.priceUsd = "Enter the international price in US dollars.";
+  const usd = usdPrices(input, existing);
+  if (usd.compareAt !== null && usd.compareAt > 0 && (usd.price === null || usd.compareAt <= usd.price)) {
+    errors.compareAtPriceUsd = "Compare-at price must be higher than the international price.";
+  }
   if (input.images.filter((image) => image.isPrimary).length > 1) errors.images = "Only one image can be primary.";
   if (input.status === "PUBLISHED") {
     if (!input.categoryId) errors.categoryId = "Choose a category before publishing.";
@@ -210,6 +238,7 @@ function saveStatements({ c, input, productId, existing }: SaveContext): D1Prepa
       .bind(newId(), productId, variantId, delta, reason, note, actor);
 
   const slug = input.slug ?? slugify(input.name);
+  const usd = usdPrices(input, existing?.row);
   const values = [
     slug,
     input.name,
@@ -221,14 +250,17 @@ function saveStatements({ c, input, productId, existing }: SaveContext): D1Prepa
     input.costPrice != null ? toPaise(input.costPrice) : null,
     input.lowStockThreshold,
     input.popularity,
+    usd.price,
+    usd.compareAt,
   ];
 
   if (!existing) {
     statements.push(
       db
         .prepare(
-          `INSERT INTO products (slug, name, status, price_paise, product_json, category_id, compare_at_price_paise, cost_price_paise, low_stock_threshold, popularity, id, published_at, stock)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+          `INSERT INTO products (slug, name, status, price_paise, product_json, category_id, compare_at_price_paise, cost_price_paise, low_stock_threshold, popularity,
+                                 price_usd_cents, compare_at_price_usd_cents, id, published_at, stock)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
         )
         .bind(...values, productId, input.status === "PUBLISHED" ? nowIso() : null),
     );
@@ -237,10 +269,10 @@ function saveStatements({ c, input, productId, existing }: SaveContext): D1Prepa
       db
         .prepare(
           `UPDATE products SET slug = ?1, name = ?2, status = ?3, price_paise = ?4, product_json = ?5, category_id = ?6, compare_at_price_paise = ?7,
-                  cost_price_paise = ?8, low_stock_threshold = ?9, popularity = ?10,
-                  published_at = CASE WHEN ?3 = 'PUBLISHED' AND published_at IS NULL THEN ?12 ELSE published_at END,
+                  cost_price_paise = ?8, low_stock_threshold = ?9, popularity = ?10, price_usd_cents = ?11, compare_at_price_usd_cents = ?12,
+                  published_at = CASE WHEN ?3 = 'PUBLISHED' AND published_at IS NULL THEN ?14 ELSE published_at END,
                   updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?11`,
+            WHERE id = ?13`,
         )
         .bind(...values, productId, nowIso()),
     );
@@ -260,15 +292,19 @@ function saveStatements({ c, input, productId, existing }: SaveContext): D1Prepa
     const pricePaise = price === toPaise(input.price) ? null : price;
     const compare = variant.compareAtPrice ? toPaise(variant.compareAtPrice) : null;
     const current = variant.id ? previous.get(variant.id) : undefined;
+    const usdOverride = variant.priceUsd === undefined ? (current?.price_usd_cents ?? null) : variant.priceUsd === null ? null : toPaise(variant.priceUsd);
+    const priceUsd = usdOverride === usd.price ? null : usdOverride;
+    const compareUsd =
+      variant.compareAtPriceUsd === undefined ? (current?.compare_at_price_usd_cents ?? null) : variant.compareAtPriceUsd ? toPaise(variant.compareAtPriceUsd) : null;
     if (current) {
       kept.add(current.id);
       statements.push(
         db
           .prepare(
-            `UPDATE product_variants SET sku = ?, color_id = ?, size_id = ?, price_paise = ?, compare_at_price_paise = ?, is_active = ?, sort_order = ?,
-                    updated_at = CURRENT_TIMESTAMP WHERE id = ? AND product_id = ?`,
+            `UPDATE product_variants SET sku = ?, color_id = ?, size_id = ?, price_paise = ?, compare_at_price_paise = ?, price_usd_cents = ?, compare_at_price_usd_cents = ?,
+                    is_active = ?, sort_order = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND product_id = ?`,
           )
-          .bind(variant.sku, variant.colorId, variant.sizeId, pricePaise, compare, variant.isActive ? 1 : 0, variant.sortOrder, current.id, productId),
+          .bind(variant.sku, variant.colorId, variant.sizeId, pricePaise, compare, priceUsd, compareUsd, variant.isActive ? 1 : 0, variant.sortOrder, current.id, productId),
       );
       // Applied as a delta from what we read, so orders placed meanwhile are not overwritten.
       const delta = variant.inventory - current.stock;
@@ -281,10 +317,10 @@ function saveStatements({ c, input, productId, existing }: SaveContext): D1Prepa
       statements.push(
         db
           .prepare(
-            `INSERT INTO product_variants (id, product_id, sku, color_id, size_id, price_paise, compare_at_price_paise, stock, is_active, sort_order)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO product_variants (id, product_id, sku, color_id, size_id, price_paise, compare_at_price_paise, price_usd_cents, compare_at_price_usd_cents, stock, is_active, sort_order)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           )
-          .bind(variantId, productId, variant.sku, variant.colorId, variant.sizeId, pricePaise, compare, variant.inventory, variant.isActive ? 1 : 0, variant.sortOrder),
+          .bind(variantId, productId, variant.sku, variant.colorId, variant.sizeId, pricePaise, compare, priceUsd, compareUsd, variant.inventory, variant.isActive ? 1 : 0, variant.sortOrder),
       );
       if (variant.inventory > 0) statements.push(movement(variantId, variant.inventory, "INITIAL", "Variant created"));
     }
@@ -357,6 +393,8 @@ const listSchema = z.object({
   stock: z.enum(["in", "low", "out"]).optional(),
   flag: z.enum(["featured", "trending", "new"]).optional(),
   category: z.string().max(64).optional(),
+  /** Products without an international price are not sold outside India. */
+  pricing: z.enum(["missing-usd"]).optional(),
   sort: z.enum(["newest", "oldest", "name", "price-low", "price-high", "stock-low", "updated", "featured"]).default("newest"),
 });
 
@@ -366,6 +404,7 @@ adminProductRoutes.get("/", can("products.view"), async (c) => {
   let views = catalog.products.map((row) => viewProduct(catalog, row));
   if (input.q) views = views.filter((view) => matchesSearch(view, input.q!));
   if (input.status) views = views.filter((view) => view.row.status === input.status);
+  if (input.pricing === "missing-usd") views = views.filter((view) => view.row.price_usd_cents === null);
   if (input.category) views = views.filter((view) => view.row.category_id === input.category || view.category?.slug === input.category);
   if (input.stock) {
     views = views.filter((view) => (input.stock === "out" ? view.inventory <= 0 : input.stock === "low" ? view.inventory > 0 && view.inventory <= view.row.low_stock_threshold : view.inventory > view.row.low_stock_threshold));
@@ -394,6 +433,7 @@ adminProductRoutes.get("/", can("products.view"), async (c) => {
     published: catalog.products.filter((row) => row.status === "PUBLISHED").length,
     draft: catalog.products.filter((row) => row.status === "DRAFT").length,
     archived: catalog.products.filter((row) => row.status === "ARCHIVED").length,
+    missingUsd: catalog.products.filter((row) => row.price_usd_cents === null && row.status !== "ARCHIVED").length,
   };
   return paginated(c, views.slice(start, start + input.limit).map((view) => adminProductRow(view, resolve)), views.length, input.page, input.limit, { counts });
 });
@@ -432,7 +472,7 @@ async function update(c: Context<AppEnv>) {
     input.variants.some((variant) => (variant.id && byId.has(variant.id) ? byId.get(variant.id)!.stock !== variant.inventory : variant.inventory > 0)) ||
     variants.some((variant) => variant.stock > 0 && !input.variants.some((entry) => entry.id === variant.id));
   assertFieldPermissions(c, input, { status: row.status, details: readProductDetails(row.product_json), stockChanged });
-  await validateReferences(db, input, productId);
+  await validateReferences(db, input, productId, row);
 
   const statements = saveStatements({
     c,
@@ -445,7 +485,13 @@ async function update(c: Context<AppEnv>) {
       action: input.status !== row.status ? `product.update.status.${input.status.toLowerCase()}` : "product.update",
       entityType: "product",
       targetId: productId,
-      metadata: { name: input.name, from: row.status, to: input.status },
+      metadata: {
+        name: input.name,
+        from: row.status,
+        to: input.status,
+        ...(toPaise(input.price) !== row.price_paise ? { priceInr: [row.price_paise, toPaise(input.price)] } : {}),
+        ...(input.priceUsd !== undefined && toPaise(input.priceUsd) !== row.price_usd_cents ? { priceUsd: [row.price_usd_cents, toPaise(input.priceUsd)] } : {}),
+      },
     }),
   );
   try {

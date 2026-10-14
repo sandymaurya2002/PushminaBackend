@@ -1,3 +1,5 @@
+import { toMajor, type Currency } from "../commerce/currency";
+import { versioned } from "../db/versioned";
 import { asRecord, asStringArray, parseJson, placeholders, toIso, toRupees } from "../lib/util";
 
 export const BADGES = ["NEW", "BESTSELLER", "LIMITED", "HANDCRAFTED", "EXCLUSIVE"] as const;
@@ -11,6 +13,9 @@ export interface ProductRow {
   name: string;
   status: "DRAFT" | "PUBLISHED" | "ARCHIVED";
   price_paise: number;
+  /** International price; null until an admin enters one (the product is then not sold outside India). */
+  price_usd_cents: number | null;
+  compare_at_price_usd_cents: number | null;
   stock: number;
   product_json: string;
   category_id: string | null;
@@ -32,9 +37,39 @@ export interface VariantRow {
   size_id: string | null;
   price_paise: number | null;
   compare_at_price_paise: number | null;
+  /** Variant overrides; null means "same as the product". */
+  price_usd_cents: number | null;
+  compare_at_price_usd_cents: number | null;
   stock: number;
   is_active: number;
   sort_order: number;
+}
+
+/* ------------------------------------------------------------------ *
+ * Prices (minor units of the requested currency)
+ * ------------------------------------------------------------------ */
+
+/** The product's own price in this currency, or null when it has none (USD not entered yet). */
+export function basePrice(row: ProductRow, currency: Currency): number | null {
+  return currency === "INR" ? row.price_paise : row.price_usd_cents;
+}
+
+export function baseCompareAt(row: ProductRow, currency: Currency): number | null {
+  return currency === "INR" ? row.compare_at_price_paise : row.compare_at_price_usd_cents;
+}
+
+/** A product is sold in a currency only once its base price in that currency exists. */
+export function pricedIn(row: ProductRow, currency: Currency): boolean {
+  return basePrice(row, currency) !== null;
+}
+
+export function variantPrice(variant: VariantRow, row: ProductRow, currency: Currency): number | null {
+  if (!pricedIn(row, currency)) return null;
+  return (currency === "INR" ? variant.price_paise : variant.price_usd_cents) ?? basePrice(row, currency);
+}
+
+export function variantCompareAt(variant: VariantRow, row: ProductRow, currency: Currency): number | null {
+  return (currency === "INR" ? variant.compare_at_price_paise : variant.compare_at_price_usd_cents) ?? baseCompareAt(row, currency);
 }
 
 export interface ImageRow {
@@ -241,6 +276,11 @@ export async function loadCatalog(db: D1Database, options: LoadOptions = {}): Pr
   };
 }
 
+/** The published catalogue for storefront reads, reloaded only after a catalogue write. */
+export function publishedCatalog(db: D1Database): Promise<Catalog> {
+  return versioned(db, "catalog", "published", () => loadCatalog(db, { publishedOnly: true }));
+}
+
 /* ------------------------------------------------------------------ *
  * Mapping
  * ------------------------------------------------------------------ */
@@ -317,23 +357,30 @@ function imageDto(image: ImageRow, resolve: MediaResolver, fallbackAlt: string) 
   };
 }
 
-function variantDto(view: ProductView, variant: VariantRow, catalog: Catalog) {
-  const price = variant.price_paise ?? view.row.price_paise;
-  const compare = variant.compare_at_price_paise ?? view.row.compare_at_price_paise;
+function variantDto(view: ProductView, variant: VariantRow, catalog: Catalog, currency: Currency) {
+  const price = variantPrice(variant, view.row, currency) ?? 0;
+  const compare = variantCompareAt(variant, view.row, currency);
   return {
     id: variant.id,
     sku: variant.sku,
     colorSlug: variant.color_id ? catalog.terms.get(variant.color_id)?.slug : undefined,
     sizeSlug: variant.size_id ? catalog.terms.get(variant.size_id)?.slug : undefined,
-    price: toRupees(price),
-    compareAtPrice: compare && compare > price ? toRupees(compare) : undefined,
+    price: toMajor(price),
+    compareAtPrice: compare && compare > price ? toMajor(compare) : undefined,
     inventory: Math.max(0, variant.stock),
   };
 }
 
-/** Storefront shape, matching the Next.js `Product` type. Never includes cost price or drafts. */
-export function publicProduct(view: ProductView, catalog: Catalog, resolve: MediaResolver, mode: "full" | "card" = "full") {
+/**
+ * Storefront shape, matching the Next.js `Product` type, priced in one
+ * currency only. Never includes cost price or drafts. A product without a
+ * price in `currency` is marked `availableInRegion: false` with a zero price;
+ * listings leave such products out (see publishedViews).
+ */
+export function publicProduct(view: ProductView, catalog: Catalog, resolve: MediaResolver, mode: "full" | "card" = "full", currency: Currency = "INR") {
   const { row, details } = view;
+  const price = basePrice(row, currency);
+  const compare = baseCompareAt(row, currency);
   const collectionSlugs = view.collectionIds
     .map((id) => catalog.collections.get(id))
     .filter((collection): collection is CollectionRow => Boolean(collection && collection.is_active === 1))
@@ -357,13 +404,14 @@ export function publicProduct(view: ProductView, catalog: Catalog, resolve: Medi
     materialSlug: view.material?.slug ?? "",
     pattern: view.pattern?.name ?? "",
     patternSlug: view.pattern?.slug ?? "",
-    price: toRupees(row.price_paise),
-    compareAtPrice: row.compare_at_price_paise && row.compare_at_price_paise > row.price_paise ? toRupees(row.compare_at_price_paise) : undefined,
-    currency: "INR",
+    price: toMajor(price ?? 0),
+    compareAtPrice: price !== null && compare && compare > price ? toMajor(compare) : undefined,
+    currency,
+    availableInRegion: price !== null,
     images: mode === "card" ? images.slice(0, 2) : images,
     colors: view.colors.map((color) => ({ name: color.name, slug: color.slug, hex: color.hex ?? "#d8c7ae" })),
     sizes: view.sizes.map((size) => ({ name: size.name, slug: size.slug, ...(size.measurement ? { measurement: size.measurement } : {}) })),
-    variants: view.activeVariants.map((variant) => variantDto(view, variant, catalog)),
+    variants: view.activeVariants.map((variant) => variantDto(view, variant, catalog, currency)),
     inventory: Math.max(0, view.inventory),
     badges: details.badges.map((badge) => badge.toLowerCase()),
     publishedAt: (toIso(row.published_at) ?? toIso(row.created_at) ?? "").slice(0, 10),
@@ -393,8 +441,11 @@ export function stockState(view: ProductView): "in" | "low" | "out" {
 /** Admin shape: storefront DTO plus merchandising flags and the editable `raw` record. */
 export function adminProduct(view: ProductView, catalog: Catalog, resolve: MediaResolver) {
   const { row, details } = view;
+  const usd = (cents: number | null) => (cents === null ? null : toMajor(cents));
   return {
-    ...publicProduct(view, catalog, resolve, "full"),
+    ...publicProduct(view, catalog, resolve, "full", "INR"),
+    priceUsd: usd(row.price_usd_cents),
+    compareAtPriceUsd: usd(row.compare_at_price_usd_cents),
     status: row.status,
     isFeatured: details.isFeatured,
     isTrending: details.isTrending,
@@ -434,6 +485,8 @@ export function adminProduct(view: ProductView, catalog: Catalog, resolve: Media
         sizeId: variant.size_id,
         price: toRupees(variant.price_paise ?? row.price_paise),
         compareAtPrice: variant.compare_at_price_paise === null ? null : toRupees(variant.compare_at_price_paise),
+        priceUsd: usd(variant.price_usd_cents ?? row.price_usd_cents),
+        compareAtPriceUsd: usd(variant.compare_at_price_usd_cents),
         inventory: variant.stock,
         isActive: variant.is_active === 1,
       })),
@@ -450,6 +503,8 @@ export function adminProductRow(view: ProductView, resolve: MediaResolver) {
     status: view.row.status,
     price: toRupees(view.row.price_paise),
     compareAtPrice: view.row.compare_at_price_paise === null ? null : toRupees(view.row.compare_at_price_paise),
+    priceUsd: view.row.price_usd_cents === null ? null : toMajor(view.row.price_usd_cents),
+    compareAtPriceUsd: view.row.compare_at_price_usd_cents === null ? null : toMajor(view.row.compare_at_price_usd_cents),
     inventory: view.inventory,
     variantCount: view.variants.length,
     stockState: stockState(view),

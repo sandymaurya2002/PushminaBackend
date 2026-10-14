@@ -32,6 +32,11 @@ interface PageSection {
   list?: string[]
 }
 
+interface PageFaq {
+  question: string
+  answer: string
+}
+
 interface PageRow {
   id: string
   slug: string
@@ -39,10 +44,76 @@ interface PageRow {
   eyebrow: string | null
   intro: string | null
   sections: PageSection[]
+  faqs: PageFaq[]
   updatedLabel: string | null
+  metaTitle: string | null
+  metaDescription: string | null
   status: string
   isSystem: boolean
   updatedAt: string
+}
+
+const EMPTY_FORM = {
+  title: '',
+  eyebrow: '',
+  intro: '',
+  sections: '',
+  faqs: '',
+  updatedLabel: '',
+  metaTitle: '',
+  metaDescription: '',
+  status: 'PUBLISHED',
+}
+
+/**
+ * Sections are edited as readable text rather than JSON: "## Heading", then
+ * paragraphs separated by a blank line, with "- " lines for a bullet list.
+ */
+function sectionsToText(sections: PageSection[]): string {
+  return sections
+    .map((section) =>
+      [
+        `## ${section.heading}`,
+        ...(section.body ?? []).flatMap((paragraph) => [paragraph, '']),
+        ...(section.list ?? []).map((item) => `- ${item}`),
+      ]
+        .join('\n')
+        .trim(),
+    )
+    .join('\n\n')
+}
+
+function textToSections(text: string): PageSection[] {
+  return text
+    .split(/\n(?=## )/)
+    .filter((block) => block.trim())
+    .map((block) => {
+      const [first = '', ...rest] = block.split('\n')
+      const list = rest.filter((line) => /^\s*-\s+/.test(line)).map((line) => line.replace(/^\s*-\s+/, '').trim())
+      const body = rest
+        .filter((line) => !/^\s*-\s+/.test(line))
+        .join('\n')
+        .split(/\n\s*\n/)
+        .map((paragraph) => paragraph.trim())
+        .filter(Boolean)
+      return { heading: first.replace(/^##\s*/, '').trim(), body, ...(list.length ? { list } : {}) }
+    })
+}
+
+/** FAQs as "Q: …" / "A: …" pairs separated by a blank line. */
+function faqsToText(faqs: PageFaq[]): string {
+  return faqs.map((faq) => `Q: ${faq.question}\nA: ${faq.answer}`).join('\n\n')
+}
+
+function textToFaqs(text: string): PageFaq[] {
+  return text
+    .split(/\n\s*\n/)
+    .map((block) => {
+      const question = /^Q:\s*(.+)$/im.exec(block)?.[1]?.trim() ?? ''
+      const answer = /^A:\s*([\s\S]+)$/im.exec(block)?.[1]?.trim() ?? ''
+      return { question, answer }
+    })
+    .filter((faq) => faq.question && faq.answer)
 }
 
 export function Pages() {
@@ -51,7 +122,7 @@ export function Pages() {
   const queryClient = useQueryClient()
 
   const [editing, setEditing] = useState<PageRow | null>(null)
-  const [form, setForm] = useState({ title: '', eyebrow: '', intro: '', sections: '', status: 'PUBLISHED' })
+  const [form, setForm] = useState(EMPTY_FORM)
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['admin-pages'],
@@ -63,11 +134,11 @@ export function Pages() {
       title: page.title,
       eyebrow: page.eyebrow ?? '',
       intro: page.intro ?? '',
-      // Sections are edited as readable text: "Heading" then paragraphs,
-      // separated by a blank line. Far less error-prone than raw JSON.
-      sections: (page.sections ?? [])
-        .map((section) => `## ${section.heading}\n${(section.body ?? []).join('\n\n')}`)
-        .join('\n\n'),
+      sections: sectionsToText(page.sections ?? []),
+      faqs: faqsToText(page.faqs ?? []),
+      updatedLabel: page.updatedLabel ?? '',
+      metaTitle: page.metaTitle ?? '',
+      metaDescription: page.metaDescription ?? '',
       status: page.status,
     })
     setEditing(page)
@@ -76,25 +147,15 @@ export function Pages() {
   const save = useMutation({
     mutationFn: async () => {
       if (!editing) return
-      const blocks = form.sections.split(/\n(?=## )/).filter((block) => block.trim())
-      const sections = blocks.map((block) => {
-        const lines = block.split('\n')
-        const heading = lines[0].replace(/^##\s*/, '').trim()
-        const body = lines
-          .slice(1)
-          .join('\n')
-          .split('\n\n')
-          .map((paragraph) => paragraph.trim())
-          .filter(Boolean)
-        return { heading, body }
-      })
-
       return api.put(`/admin/content/pages/${editing.id}`, {
         title: form.title,
         eyebrow: form.eyebrow || null,
         intro: form.intro || null,
-        sections,
-        faqs: [],
+        sections: textToSections(form.sections),
+        faqs: textToFaqs(form.faqs),
+        updatedLabel: form.updatedLabel || null,
+        metaTitle: form.metaTitle || null,
+        metaDescription: form.metaDescription || null,
         status: form.status,
       })
     },
@@ -253,7 +314,7 @@ export function Pages() {
           <Field
             label="Sections"
             htmlFor="p-sections"
-            hint="Start a section with ## followed by its heading. Separate paragraphs with a blank line."
+            hint="Start a section with ## followed by its heading. Separate paragraphs with a blank line; start a line with - for a bullet point."
           >
             <textarea
               id="p-sections"
@@ -261,9 +322,49 @@ export function Pages() {
               value={form.sections}
               onChange={(event) => setForm({ ...form, sections: event.target.value })}
               className="input h-auto py-2 font-mono text-xs"
-              placeholder={'## Dispatch\nIn-stock pieces are dispatched within 48 hours.\n\nYou will receive a tracking number by email.'}
+              placeholder={'## Dispatch\nIn-stock pieces are dispatched within 48 hours.\n\nYou will receive a tracking number by email.\n- Mainland India: 3–6 working days'}
             />
           </Field>
+
+          <Field label="FAQs" htmlFor="p-faqs" hint='Each question as "Q: …" then "A: …" on the next line, separated by a blank line.'>
+            <textarea
+              id="p-faqs"
+              rows={8}
+              value={form.faqs}
+              onChange={(event) => setForm({ ...form, faqs: event.target.value })}
+              className="input h-auto py-2 font-mono text-xs"
+              placeholder={'Q: How long does delivery take?\nA: 3–6 working days within India.'}
+            />
+          </Field>
+
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Field label="Last updated label" htmlFor="p-updated" hint='Shown on the page, e.g. "1 July 2026".'>
+              <input
+                id="p-updated"
+                value={form.updatedLabel}
+                onChange={(event) => setForm({ ...form, updatedLabel: event.target.value })}
+                className="input"
+              />
+            </Field>
+            <Field label="Search title" htmlFor="p-meta-title" hint={`${form.metaTitle.length}/70`}>
+              <input
+                id="p-meta-title"
+                maxLength={70}
+                value={form.metaTitle}
+                onChange={(event) => setForm({ ...form, metaTitle: event.target.value })}
+                className="input"
+              />
+            </Field>
+            <Field label="Search description" htmlFor="p-meta-desc" hint={`${form.metaDescription.length}/170`}>
+              <input
+                id="p-meta-desc"
+                maxLength={170}
+                value={form.metaDescription}
+                onChange={(event) => setForm({ ...form, metaDescription: event.target.value })}
+                className="input"
+              />
+            </Field>
+          </div>
         </div>
       </Modal>
     </>

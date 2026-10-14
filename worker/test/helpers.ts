@@ -104,6 +104,7 @@ export async function createProduct(adminToken: string, overrides: Record<string
       name: `Test Shawl ${tag}`,
       slug: `test-shawl-${tag}`,
       price: 2500,
+      priceUsd: 30,
       status: "PUBLISHED",
       categoryId: await ensureCategory(adminToken),
       images: [{ url: "https://images.example.com/shawl.jpg", alt: "Shawl" }],

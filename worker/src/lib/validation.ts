@@ -1,5 +1,6 @@
 import type { Context } from "hono";
 import { z } from "zod";
+import { isIndia } from "../commerce/currency";
 import { badRequest, validationError } from "./errors";
 
 const MAX_JSON_BYTES = 256 * 1024;
@@ -84,15 +85,59 @@ export const phone = z
   .trim()
   .regex(/^[0-9+\-\s]{10,15}$/, "Please enter a valid phone number.");
 
-export const addressInput = z.object({
-  label: z.string().trim().min(1).max(40).default("Home"),
+/** International numbers, e.g. "+44 20 7946 0958" or "+1 (212) 555-0100". */
+const internationalPhone = /^\+?[0-9][0-9\-\s().]{5,22}$/;
+const internationalPostalCode = /^[A-Za-z0-9][A-Za-z0-9 \-]{1,11}$/;
+
+/**
+ * Field shapes shared by saved and checkout addresses. Rules that depend on
+ * the country (6-digit PIN and a state for India; any postal code format
+ * abroad) are applied by addressProblems once the country is known.
+ */
+export const addressFields = {
   fullName: z.string().trim().min(2, "Please enter the full name.").max(120),
   line1: z.string().trim().min(4, "Please enter the address.").max(200),
   line2: z.string().trim().max(200).optional().nullable(),
   city: z.string().trim().min(2, "Please enter the city.").max(80),
-  state: z.string().trim().min(2, "Please enter the state.").max(80),
-  postalCode: z.string().trim().regex(/^[0-9]{6}$/, "Please enter a valid 6-digit PIN code."),
-  country: z.string().trim().max(80).default("India"),
-  phone,
+  state: z.string().trim().max(80).default(""),
+  postalCode: z.string().trim().min(1, "Please enter a postal code.").max(12, "Please enter a valid postal code."),
+  country: z.string().trim().min(2).max(80).default("India"),
+  phone: z.string().trim().min(1, "Please enter a valid phone number.").max(24, "Please enter a valid phone number."),
+};
+
+export function addressProblems(address: { country: string; state: string; postalCode: string; phone: string }): Record<string, string> | null {
+  const problems: Record<string, string> = {};
+  if (isIndia(address.country)) {
+    if (!/^[0-9]{6}$/.test(address.postalCode)) problems.postalCode = "Please enter a valid 6-digit PIN code.";
+    if (address.state.length < 2) problems.state = "Please enter the state.";
+    if (!phone.safeParse(address.phone).success) problems.phone = "Please enter a valid phone number.";
+  } else {
+    if (!internationalPostalCode.test(address.postalCode)) problems.postalCode = "Please enter a valid postal code.";
+    if (!internationalPhone.test(address.phone)) problems.phone = "Please enter a valid phone number with country code.";
+  }
+  return Object.keys(problems).length ? problems : null;
+}
+
+/** Adds addressProblems to a schema whose output is an address. */
+export function withAddressRules<T extends { country: string; state: string; postalCode: string; phone: string }>(value: T, ctx: z.RefinementCtx) {
+  for (const [path, message] of Object.entries(addressProblems(value) ?? {})) ctx.addIssue({ code: "custom", path: [path], message });
+}
+
+export const addressShape = z.object({
+  label: z.string().trim().min(1).max(40).default("Home"),
+  ...addressFields,
   isDefault: z.boolean().default(false),
 });
+
+export const addressInput = addressShape.superRefine(withAddressRules);
+
+/** Partial update: no defaults, so omitted fields keep their stored values. Check the merged address with addressProblems. */
+export const addressPatch = z
+  .object({
+    ...addressFields,
+    label: z.string().trim().min(1).max(40),
+    state: z.string().trim().max(80),
+    country: z.string().trim().min(2).max(80),
+    isDefault: z.boolean(),
+  })
+  .partial();

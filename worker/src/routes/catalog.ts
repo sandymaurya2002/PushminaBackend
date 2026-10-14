@@ -1,6 +1,6 @@
 import { Hono, type Context } from "hono";
 import { z } from "zod";
-import { loadCatalog, mediaResolver, publicCollection, publicProduct, type Catalog, type CollectionRow } from "../catalog/model";
+import { mediaResolver, publishedCatalog, publicCollection, publicProduct, type Catalog, type CollectionRow } from "../catalog/model";
 import { applyFilters, buildFacets, inCollectionScope, matchesSearch, publishedViews, SORTS, sortViews } from "../catalog/query";
 import { notFound } from "../lib/errors";
 import { ok, pagination } from "../lib/http";
@@ -11,8 +11,10 @@ export function resolverFor(c: Context<AppEnv>) {
   return mediaResolver(c.get("config").mediaBaseUrl ?? new URL(c.req.url).origin);
 }
 
+/** Prices differ per region, so shared caches must key on how the region was chosen. */
 function cachePublic(c: Context<AppEnv>) {
   c.header("Cache-Control", "public, max-age=30, s-maxage=60, stale-while-revalidate=120");
+  c.header("Vary", "X-Client-Country, CF-IPCountry", { append: true });
 }
 
 const listSchema = z.object({
@@ -40,20 +42,21 @@ function activeCollection(catalog: Catalog, collectionSlug: string): CollectionR
 
 async function listProducts(c: Context<AppEnv>, collectionSlug?: string) {
   const input = query(c, listSchema);
-  const catalog = await loadCatalog(c.env.DB, { publishedOnly: true });
-  let scope = publishedViews(catalog);
+  const catalog = await publishedCatalog(c.env.DB);
+  const currency = c.get("currency");
+  let scope = publishedViews(catalog, currency);
   if (collectionSlug) scope = inCollectionScope(scope, activeCollection(catalog, collectionSlug));
   if (input.q) scope = scope.filter((view) => matchesSearch(view, input.q!));
 
-  const filtered = sortViews(applyFilters(scope, input, catalog), input.sort);
+  const filtered = sortViews(applyFilters(scope, input, catalog, currency), input.sort, currency);
   const start = (input.page - 1) * input.limit;
   const resolve = resolverFor(c);
-  const items = filtered.slice(start, start + input.limit).map((view) => publicProduct(view, catalog, resolve, "card"));
+  const items = filtered.slice(start, start + input.limit).map((view) => publicProduct(view, catalog, resolve, "card", currency));
   const includeFacets = input.facets !== "false" && input.facets !== "0";
   cachePublic(c);
   return ok(c, items, {
     ...pagination(filtered.length, input.page, input.limit),
-    ...(includeFacets ? { facets: buildFacets(scope, catalog) } : {}),
+    ...(includeFacets ? { facets: buildFacets(scope, catalog, currency) } : {}),
   });
 }
 
@@ -64,13 +67,13 @@ catalogRoutes.get("/products", (c) => listProducts(c));
 catalogRoutes.get("/products/batch", async (c) => {
   const { slugs } = query(c, z.object({ slugs: csvList }));
   const wanted = slugs.slice(0, 24);
-  const catalog = await loadCatalog(c.env.DB, { publishedOnly: true });
+  const catalog = await publishedCatalog(c.env.DB);
   const resolve = resolverFor(c);
   const bySlug = new Map(publishedViews(catalog).map((view) => [view.row.slug, view]));
   cachePublic(c);
   return ok(
     c,
-    wanted.map((entry) => bySlug.get(entry)).filter(Boolean).map((view) => publicProduct(view!, catalog, resolve, "card")),
+    wanted.map((entry) => bySlug.get(entry)).filter(Boolean).map((view) => publicProduct(view!, catalog, resolve, "card", c.get("currency"))),
   );
 });
 
@@ -81,33 +84,35 @@ for (const [path, flag] of [
 ] as const) {
   catalogRoutes.get(path, async (c) => {
     const { limit } = query(c, z.object({ limit: z.coerce.number().int().min(1).max(48).default(12) }));
-    const catalog = await loadCatalog(c.env.DB, { publishedOnly: true });
+    const catalog = await publishedCatalog(c.env.DB);
     const resolve = resolverFor(c);
     const rail = flag === "isFeatured" ? "featured" : flag === "isTrending" ? "trending" : "newArrival";
-    const views = publishedViews(catalog)
+    const currency = c.get("currency");
+    const views = publishedViews(catalog, currency)
       .filter((view) => view.details[flag])
       .sort((a, b) => (a.details.railOrder[rail] ?? 1e9) - (b.details.railOrder[rail] ?? 1e9) || b.featuredScore - a.featuredScore);
     cachePublic(c);
-    return ok(c, views.slice(0, limit).map((view) => publicProduct(view, catalog, resolve, "card")));
+    return ok(c, views.slice(0, limit).map((view) => publicProduct(view, catalog, resolve, "card", currency)));
   });
 }
 
 catalogRoutes.get("/products/:slug", async (c) => {
   const productSlug = slug.safeParse(c.req.param("slug"));
   if (!productSlug.success) throw notFound("Product");
-  const catalog = await loadCatalog(c.env.DB, { publishedOnly: true });
+  const catalog = await publishedCatalog(c.env.DB);
   const view = publishedViews(catalog).find((entry) => entry.row.slug === productSlug.data);
   if (!view) throw notFound("Product");
   cachePublic(c);
-  return ok(c, publicProduct(view, catalog, resolverFor(c), "full"));
+  return ok(c, publicProduct(view, catalog, resolverFor(c), "full", c.get("currency")));
 });
 
 catalogRoutes.get("/products/:slug/related", async (c) => {
   const { limit } = query(c, z.object({ limit: z.coerce.number().int().min(1).max(24).default(4) }));
-  const catalog = await loadCatalog(c.env.DB, { publishedOnly: true });
-  const views = publishedViews(catalog);
-  const view = views.find((entry) => entry.row.slug === c.req.param("slug"));
+  const catalog = await publishedCatalog(c.env.DB);
+  const currency = c.get("currency");
+  const view = publishedViews(catalog).find((entry) => entry.row.slug === c.req.param("slug"));
   if (!view) throw notFound("Product");
+  const views = publishedViews(catalog, currency);
   const explicit = view.details.relatedProductIds.map((id) => views.find((entry) => entry.row.id === id)).filter((entry) => entry && entry.inventory > 0);
   const sameCategory = sortViews(
     views.filter((entry) => entry.row.id !== view.row.id && entry.row.category_id === view.row.category_id && entry.inventory > 0),
@@ -116,12 +121,12 @@ catalogRoutes.get("/products/:slug/related", async (c) => {
   const picked = [...new Map([...explicit, ...sameCategory].map((entry) => [entry!.row.id, entry!])).values()].slice(0, limit);
   const resolve = resolverFor(c);
   cachePublic(c);
-  return ok(c, picked.map((entry) => publicProduct(entry, catalog, resolve, "card")));
+  return ok(c, picked.map((entry) => publicProduct(entry, catalog, resolve, "card", currency)));
 });
 
 catalogRoutes.get("/collections", async (c) => {
-  const catalog = await loadCatalog(c.env.DB, { publishedOnly: true });
-  const views = publishedViews(catalog);
+  const catalog = await publishedCatalog(c.env.DB);
+  const views = publishedViews(catalog, c.get("currency"));
   const resolve = resolverFor(c);
   const collections = [...catalog.collections.values()]
     .filter((collection) => collection.is_active === 1)
@@ -131,9 +136,9 @@ catalogRoutes.get("/collections", async (c) => {
 });
 
 catalogRoutes.get("/collections/:slug", async (c) => {
-  const catalog = await loadCatalog(c.env.DB, { publishedOnly: true });
+  const catalog = await publishedCatalog(c.env.DB);
   const collection = activeCollection(catalog, c.req.param("slug"));
-  const count = inCollectionScope(publishedViews(catalog), collection).length;
+  const count = inCollectionScope(publishedViews(catalog, c.get("currency")), collection).length;
   cachePublic(c);
   return ok(c, publicCollection(collection, catalog, resolverFor(c), count));
 });
@@ -141,8 +146,8 @@ catalogRoutes.get("/collections/:slug", async (c) => {
 catalogRoutes.get("/collections/:slug/products", (c) => listProducts(c, c.req.param("slug")));
 
 catalogRoutes.get("/categories", async (c) => {
-  const catalog = await loadCatalog(c.env.DB, { publishedOnly: true });
-  const views = publishedViews(catalog);
+  const catalog = await publishedCatalog(c.env.DB);
+  const views = publishedViews(catalog, c.get("currency"));
   const resolve = resolverFor(c);
   cachePublic(c);
   return ok(
@@ -162,7 +167,7 @@ catalogRoutes.get("/categories", async (c) => {
 });
 
 catalogRoutes.get("/taxonomy", async (c) => {
-  const catalog = await loadCatalog(c.env.DB, { productIds: [] });
+  const catalog = await publishedCatalog(c.env.DB);
   const terms = [...catalog.terms.values()].filter((term) => term.is_active === 1);
   const pick = (kind: string) =>
     terms
@@ -181,9 +186,10 @@ catalogRoutes.get("/taxonomy", async (c) => {
 catalogRoutes.get("/search", async (c) => {
   const input = query(c, z.object({ q: z.string().trim().max(80).default(""), limit: z.coerce.number().int().min(1).max(24).default(8) }));
   if (!input.q) return ok(c, { products: [], collections: [], total: 0 });
-  const catalog = await loadCatalog(c.env.DB, { publishedOnly: true });
+  const catalog = await publishedCatalog(c.env.DB);
   const needle = input.q.toLowerCase();
-  const matches = sortViews(publishedViews(catalog).filter((view) => matchesSearch(view, input.q)), "featured").sort(
+  const currency = c.get("currency");
+  const matches = sortViews(publishedViews(catalog, currency).filter((view) => matchesSearch(view, input.q)), "featured").sort(
     (a, b) => Number(b.row.name.toLowerCase().startsWith(needle)) - Number(a.row.name.toLowerCase().startsWith(needle)),
   );
   const resolve = resolverFor(c);
@@ -193,7 +199,7 @@ catalogRoutes.get("/search", async (c) => {
     .map((collection) => ({ slug: collection.slug, name: collection.name }));
   cachePublic(c);
   return ok(c, {
-    products: matches.slice(0, input.limit).map((view) => publicProduct(view, catalog, resolve, "card")),
+    products: matches.slice(0, input.limit).map((view) => publicProduct(view, catalog, resolve, "card", currency)),
     collections,
     total: matches.length,
   });

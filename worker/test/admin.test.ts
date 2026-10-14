@@ -22,12 +22,12 @@ describe("admin orders", () => {
     expect(list.json.data[0]).toMatchObject({ orderNumber: order.orderNumber, status: "PENDING", paymentMethod: "COD", itemCount: 1 });
 
     const detail = await call(`/api/v1/admin/orders/${order.id}`, { token: admin.token });
-    expect(detail.json.data.allowedTransitions).toEqual(["CONFIRMED", "CANCELLED"]);
+    expect(detail.json.data.allowedTransitions).toEqual(["PROCESSING", "CANCELLED"]);
     expect(detail.json.data.statusHistory).toHaveLength(1);
 
-    const confirmed = await call(`/api/v1/admin/orders/${order.id}/status`, { method: "PATCH", token: admin.token, body: { status: "CONFIRMED", note: "Called customer" } });
-    expect(confirmed.json.data.status).toBe("CONFIRMED");
-    expect(confirmed.json.data.statusHistory.at(-1)).toMatchObject({ fromStatus: "PENDING", toStatus: "CONFIRMED", note: "Called customer" });
+    const confirmed = await call(`/api/v1/admin/orders/${order.id}/status`, { method: "PATCH", token: admin.token, body: { status: "PROCESSING", note: "Called customer" } });
+    expect(confirmed.json.data.status).toBe("PROCESSING");
+    expect(confirmed.json.data.statusHistory.at(-1)).toMatchObject({ fromStatus: "PENDING", toStatus: "PROCESSING", note: "Called customer" });
 
     const csv = await call("/api/v1/admin/orders/export/csv", { token: admin.token });
     expect(csv.status).toBe(200);
@@ -40,13 +40,18 @@ describe("admin orders", () => {
     const support = await createAdmin("SUPPORT");
     const { order } = await placeOrderFor(admin.token);
     expect((await call(`/api/v1/admin/orders/${order.id}/status`, { method: "PATCH", token: support.token, body: { status: "CANCELLED" } })).status).toBe(403);
-    expect((await call(`/api/v1/admin/orders/${order.id}/status`, { method: "PATCH", token: support.token, body: { status: "CONFIRMED" } })).status).toBe(200);
+    expect((await call(`/api/v1/admin/orders/${order.id}/status`, { method: "PATCH", token: support.token, body: { status: "PROCESSING" } })).status).toBe(200);
     expect((await call(`/api/v1/admin/orders/${order.id}/status`, { method: "PATCH", token: support.token, body: { status: "PACKED" } })).status).toBe(403);
   });
 
-  it("has no fake refunds", async () => {
+  it("refuses to refund an order that was never paid", async () => {
     const admin = await createAdmin();
-    expect((await call("/api/v1/admin/payments/refunds", { token: admin.token, body: {} })).status).toBe(501);
+    const { order } = await placeOrderFor(admin.token);
+    const refund = await call(`/api/v1/admin/orders/${order.id}/refund`, { token: admin.token, body: { reason: "Customer asked" } });
+    expect(refund.status).toBe(409);
+    const refunds = await call("/api/v1/admin/payments/refunds/all", { token: admin.token });
+    expect(refunds.status).toBe(200);
+    expect(refunds.json.data.some((entry: { order: { id: string } }) => entry.order.id === order.id)).toBe(false);
   });
 });
 
@@ -166,8 +171,11 @@ describe("audit and dashboard", () => {
 
   it("returns 501 for modules that are not migrated", async () => {
     const admin = await createAdmin();
-    for (const path of ["/api/v1/admin/reviews", "/api/v1/admin/coupons", "/api/v1/admin/blog/posts", "/api/v1/admin/content/banners"]) {
+    for (const path of ["/api/v1/admin/reviews", "/api/v1/admin/blog/posts", "/api/v1/admin/notifications"]) {
       expect((await call(path, { token: admin.token })).status).toBe(501);
+    }
+    for (const path of ["/api/v1/admin/coupons", "/api/v1/admin/content/banners", "/api/v1/admin/content/settings", "/api/v1/admin/seo", "/api/v1/admin/payments"]) {
+      expect((await call(path, { token: admin.token })).status).toBe(200);
     }
   });
 });

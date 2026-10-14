@@ -22,6 +22,9 @@ interface ProductRow {
   status: string
   price: number
   compareAtPrice: number | null
+  /** Null until an international price is entered; such products are not sold outside India. */
+  priceUsd: number | null
+  compareAtPriceUsd: number | null
   inventory: number
   variantCount: number
   stockState: 'in' | 'low' | 'out'
@@ -54,6 +57,7 @@ export function Products() {
     status: params.get('status') ?? undefined,
     stock: params.get('stock') ?? undefined,
     flag: params.get('flag') ?? undefined,
+    pricing: params.get('pricing') ?? undefined,
     sort: params.get('sort') ?? 'newest',
     page,
     limit: 25,
@@ -79,6 +83,8 @@ export function Products() {
       return { rows: result.data, meta: result.meta as ApiMeta }
     },
   })
+
+  const missingUsd = (data?.meta?.counts as { missingUsd?: number } | undefined)?.missingUsd ?? 0
 
   function setFilter(key: string, value: string) {
     const next = new URLSearchParams(params)
@@ -153,6 +159,18 @@ export function Products() {
           <option value="featured">Featured</option>
           <option value="trending">Trending</option>
           <option value="new">New arrivals</option>
+        </select>
+
+        <select
+          value={params.get('pricing') ?? ''}
+          onChange={(event) => setFilter('pricing', event.target.value)}
+          className="input w-auto"
+          aria-label="Filter by pricing"
+        >
+          <option value="">Any pricing</option>
+          <option value="missing-usd">
+            Missing USD price{missingUsd ? ` (${missingUsd})` : ''}
+          </option>
         </select>
 
         <select
@@ -234,6 +252,13 @@ export function Products() {
                             {formatPrice(product.compareAtPrice)}
                           </span>
                         )}
+                        <span className="mt-0.5 block text-xs">
+                          {product.priceUsd !== null ? (
+                            <span className="text-mocha">{formatPrice(product.priceUsd, 'USD')}</span>
+                          ) : (
+                            <span className="text-burgundy">No USD price</span>
+                          )}
+                        </span>
                       </td>
 
                       <td className="td text-right">

@@ -21,10 +21,23 @@ import {
 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { Card, ErrorState, LoadingBlock, PageHeader, Badge } from '@/components/ui'
-import { cn, formatDate, formatNumber, formatPrice, ORDER_STATUS_TONE, relativeTime } from '@/lib/utils'
+import {
+  cn,
+  CURRENCIES,
+  CURRENCY_SYMBOL,
+  type Currency,
+  formatDate,
+  formatNumber,
+  formatPrice,
+  ORDER_STATUS_TONE,
+  relativeTime,
+  titleCase,
+} from '@/lib/utils'
 
 interface DashboardData {
-  range: { days: number; since: string }
+  range: { days: number; since: string; until: string }
+  /** Every money figure below is in this currency only; INR and USD are never summed. */
+  currency: Currency
   totals: {
     users: number
     newUsers: number
@@ -44,19 +57,38 @@ interface DashboardData {
   }
   payments: {
     successful: number
+    successfulAmount: number
     pending: number
     pendingAmount: number
     failed: number
+    failedAmount: number
     refunded: number
     refundCount: number
     refundAmount: number
+    pendingRefunds: number
+    pendingRefundAmount: number
+  }
+  fulfilment: {
+    statusCounts: Record<string, number>
+    awaitingFulfilment: number
+    packed: number
+    inTransit: number
+    delivered: number
+    cancelled: number
+    returnRequested: number
+    returned: number
+    refundPending: number
+    refunded: number
   }
   alerts: {
     lowStock: number
     outOfStock: number
     pendingReviews: number
     newContactSubmissions: number
+    pendingRefunds: number
+    returnRequests: number
   }
+  recentRegistrations: Array<{ id: string; name: string; email: string; createdAt: string }>
   chart: Array<{ date: string; revenue: number; orders: number }>
   recentOrders: Array<{
     id: string
@@ -64,6 +96,7 @@ interface DashboardData {
     email: string
     status: string
     total: number
+    currency: Currency
     placedAt: string
     items: Array<{ name: string; quantity: number }>
   }>
@@ -123,10 +156,20 @@ function Metric({
 
 export function Dashboard() {
   const [days, setDays] = useState(30)
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
+  const [currency, setCurrency] = useState<Currency>('INR')
+  const custom = Boolean(from || to)
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['dashboard', days],
-    queryFn: async () => (await api.get<DashboardData>('/admin/dashboard', { days })).data,
+    queryKey: ['dashboard', currency, custom ? { from, to } : { days }],
+    queryFn: async () =>
+      (
+        await api.get<DashboardData>(
+          '/admin/dashboard',
+          custom ? { from: from || undefined, to: to || undefined, currency } : { days, currency },
+        )
+      ).data,
   })
 
   if (isLoading) return <LoadingBlock rows={8} />
@@ -144,6 +187,21 @@ export function Dashboard() {
       text: `${data.alerts.lowStock} product${data.alerts.lowStock === 1 ? '' : 's'} low on stock`,
       to: '/products?stock=low',
     },
+    data.alerts.pendingRefunds > 0 && {
+      tone: 'burgundy' as const,
+      text: `${data.alerts.pendingRefunds} refund${data.alerts.pendingRefunds === 1 ? '' : 's'} awaiting approval`,
+      to: '/refunds',
+    },
+    data.alerts.returnRequests > 0 && {
+      tone: 'gold' as const,
+      text: `${data.alerts.returnRequests} return request${data.alerts.returnRequests === 1 ? '' : 's'}`,
+      to: '/orders?status=RETURN_REQUESTED',
+    },
+    data.fulfilment.awaitingFulfilment > 0 && {
+      tone: 'gold' as const,
+      text: `${data.fulfilment.awaitingFulfilment} order${data.fulfilment.awaitingFulfilment === 1 ? '' : 's'} to process`,
+      to: '/orders?status=PAID',
+    },
     data.alerts.pendingReviews > 0 && {
       tone: 'gold' as const,
       text: `${data.alerts.pendingReviews} review${data.alerts.pendingReviews === 1 ? '' : 's'} awaiting moderation`,
@@ -160,24 +218,63 @@ export function Dashboard() {
     <>
       <PageHeader
         title="Dashboard"
-        description={`Performance for the last ${days} days.`}
+        description={
+          custom
+            ? `Performance from ${formatDate(data.range.since)} to ${formatDate(data.range.until)}.`
+            : `Performance for the last ${days} days.`
+        }
         actions={
-          <div className="flex border border-line-strong">
-            {RANGES.map((range) => (
-              <button
-                key={range.value}
-                type="button"
-                onClick={() => setDays(range.value)}
-                className={cn(
-                  'px-3 py-2 text-[0.6875rem] uppercase tracking-[0.1em] transition-colors',
-                  days === range.value
-                    ? 'bg-charcoal text-ivory'
-                    : 'text-charcoal hover:bg-cream',
-                )}
-              >
-                {range.label}
-              </button>
-            ))}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex border border-line-strong" role="group" aria-label="Currency">
+              {CURRENCIES.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => setCurrency(option)}
+                  className={cn(
+                    'px-3 py-2 text-[0.6875rem] uppercase tracking-[0.1em] transition-colors',
+                    currency === option ? 'bg-charcoal text-ivory' : 'text-charcoal hover:bg-cream',
+                  )}
+                >
+                  {CURRENCY_SYMBOL[option]} {option}
+                </button>
+              ))}
+            </div>
+            <div className="flex border border-line-strong">
+              {RANGES.map((range) => (
+                <button
+                  key={range.value}
+                  type="button"
+                  onClick={() => {
+                    setFrom('')
+                    setTo('')
+                    setDays(range.value)
+                  }}
+                  className={cn(
+                    'px-3 py-2 text-[0.6875rem] uppercase tracking-[0.1em] transition-colors',
+                    !custom && days === range.value
+                      ? 'bg-charcoal text-ivory'
+                      : 'text-charcoal hover:bg-cream',
+                  )}
+                >
+                  {range.label}
+                </button>
+              ))}
+            </div>
+            <input
+              type="date"
+              value={from}
+              onChange={(event) => setFrom(event.target.value)}
+              className="input w-auto"
+              aria-label="From date"
+            />
+            <input
+              type="date"
+              value={to}
+              onChange={(event) => setTo(event.target.value)}
+              className="input w-auto"
+              aria-label="To date"
+            />
           </div>
         }
       />
@@ -205,8 +302,8 @@ export function Dashboard() {
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Metric
           label="Net revenue"
-          value={formatPrice(data.revenue.net)}
-          sub={data.revenue.refunded > 0 ? `${formatPrice(data.revenue.refunded)} refunded` : 'after refunds'}
+          value={formatPrice(data.revenue.net, data.currency)}
+          sub={data.revenue.refunded > 0 ? `${formatPrice(data.revenue.refunded, data.currency)} refunded` : 'after refunds'}
           change={data.revenue.changePercent}
           icon={TrendingUp}
         />
@@ -225,7 +322,7 @@ export function Dashboard() {
         />
         <Metric
           label="Average order"
-          value={formatPrice(data.revenue.averageOrderValue)}
+          value={formatPrice(data.revenue.averageOrderValue, data.currency)}
           sub={`${data.totals.publishedProducts} of ${data.totals.products} published`}
           icon={Package}
         />
@@ -260,7 +357,7 @@ export function Dashboard() {
                     tickLine={false}
                     axisLine={false}
                     width={70}
-                    tickFormatter={(value: number) => `₹${formatNumber(value)}`}
+                    tickFormatter={(value: number) => `${CURRENCY_SYMBOL[data.currency]}${formatNumber(value)}`}
                   />
                   <Tooltip
                     contentStyle={{
@@ -270,7 +367,7 @@ export function Dashboard() {
                       fontSize: 12,
                     }}
                     formatter={(value: number, name: string) =>
-                      name === 'revenue' ? [formatPrice(value), 'Revenue'] : [value, 'Orders']
+                      name === 'revenue' ? [formatPrice(value, data.currency), 'Revenue'] : [value, 'Orders']
                     }
                     labelFormatter={(value: string) => formatDate(value)}
                   />
@@ -287,30 +384,60 @@ export function Dashboard() {
           )}
         </Card>
 
-        <Card title="Payments">
+        <Card
+          title="Payments"
+          actions={
+            <Link to="/payments" className="text-[0.6875rem] uppercase tracking-[0.12em] text-taupe hover:text-charcoal">
+              View all
+            </Link>
+          }
+        >
           <dl className="divide-y divide-line">
             {[
-              ['Successful', data.payments.successful, 'text-success'],
-              ['Pending', data.payments.pending, 'text-gold'],
-              ['Failed', data.payments.failed, 'text-burgundy'],
-              ['Refunded', data.payments.refunded, 'text-burgundy'],
-            ].map(([label, value, tone]) => (
-              <div key={label as string} className="flex items-center justify-between px-5 py-3.5">
+              ['Successful', data.payments.successful, data.payments.successfulAmount, 'text-success'],
+              ['Pending', data.payments.pending, data.payments.pendingAmount, 'text-gold'],
+              ['Failed', data.payments.failed, data.payments.failedAmount, 'text-burgundy'],
+              ['Refunded', data.payments.refunded, data.payments.refundAmount, 'text-burgundy'],
+              ['Refunds awaiting approval', data.payments.pendingRefunds, data.payments.pendingRefundAmount, 'text-gold'],
+            ].map(([label, count, amount, tone]) => (
+              <div key={label as string} className="flex items-center justify-between gap-3 px-5 py-3">
                 <dt className="text-sm text-mocha">{label as string}</dt>
-                <dd className={cn('font-serif text-lg', tone as string)}>{value as number}</dd>
+                <dd className="text-right">
+                  <span className={cn('font-serif text-lg', tone as string)}>{count as number}</span>
+                  <span className="ml-2 text-xs text-taupe">{formatPrice(amount as number, data.currency)}</span>
+                </dd>
               </div>
             ))}
-            <div className="flex items-center justify-between px-5 py-3.5">
-              <dt className="text-sm text-mocha">Pending value</dt>
-              <dd className="text-sm text-charcoal">{formatPrice(data.payments.pendingAmount)}</dd>
-            </div>
-            <div className="flex items-center justify-between px-5 py-3.5">
-              <dt className="text-sm text-mocha">Refunded value</dt>
-              <dd className="text-sm text-burgundy">{formatPrice(data.payments.refundAmount)}</dd>
-            </div>
           </dl>
         </Card>
       </div>
+
+      <Card title="Fulfilment" className="mt-6">
+        <div className="grid grid-cols-2 divide-line sm:grid-cols-4 xl:grid-cols-8">
+          {[
+            ['To process', data.fulfilment.awaitingFulfilment, '/orders?status=PAID'],
+            ['Packed', data.fulfilment.packed, '/orders?status=PACKED'],
+            ['In transit', data.fulfilment.inTransit, '/orders?status=SHIPPED'],
+            ['Delivered', data.fulfilment.delivered, '/orders?status=DELIVERED'],
+            ['Return requests', data.fulfilment.returnRequested, '/orders?status=RETURN_REQUESTED'],
+            ['Returned', data.fulfilment.returned, '/orders?status=RETURNED'],
+            ['Refund pending', data.fulfilment.refundPending, '/orders?status=REFUND_PENDING'],
+            ['Cancelled', data.fulfilment.cancelled, '/orders?status=CANCELLED'],
+          ].map(([label, count, to]) => (
+            <Link
+              key={label as string}
+              to={to as string}
+              className="border-b border-r border-line px-5 py-4 transition-colors hover:bg-cream/40"
+            >
+              <p className="eyebrow text-taupe">{label as string}</p>
+              <p className="mt-1.5 font-serif text-2xl text-charcoal">{formatNumber(count as number)}</p>
+            </Link>
+          ))}
+        </div>
+        <p className="px-5 py-3 text-[0.6875rem] text-taupe">
+          Orders placed in this period, by their current status.
+        </p>
+      </Card>
 
       <div className="mt-6 grid gap-6 xl:grid-cols-3">
         <Card
@@ -350,9 +477,9 @@ export function Dashboard() {
                         <span className="block truncate text-xs text-mocha">{order.email}</span>
                       </td>
                       <td className="td">
-                        <Badge className={ORDER_STATUS_TONE[order.status]}>{order.status}</Badge>
+                        <Badge className={ORDER_STATUS_TONE[order.status]}>{titleCase(order.status)}</Badge>
                       </td>
-                      <td className="td text-right text-charcoal">{formatPrice(order.total)}</td>
+                      <td className="td text-right text-charcoal">{formatPrice(order.total, order.currency)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -374,7 +501,7 @@ export function Dashboard() {
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm text-charcoal">{product.name}</span>
                     <span className="block text-[0.6875rem] text-taupe">
-                      {product.unitsSold} sold · {formatPrice(product.revenue)}
+                      {product.unitsSold} sold · {formatPrice(product.revenue, data.currency)}
                     </span>
                   </span>
                 </li>
@@ -383,6 +510,32 @@ export function Dashboard() {
           )}
         </Card>
       </div>
+
+      <Card
+        title="New customers"
+        className="mt-6"
+        actions={
+          <Link to="/customers" className="text-[0.6875rem] uppercase tracking-[0.12em] text-taupe hover:text-charcoal">
+            View all
+          </Link>
+        }
+      >
+        {data.recentRegistrations.length === 0 ? (
+          <p className="px-5 py-10 text-center text-sm text-taupe">No registrations in this period.</p>
+        ) : (
+          <ul className="divide-y divide-line">
+            {data.recentRegistrations.map((customer) => (
+              <li key={customer.id} className="flex items-center gap-3 px-5 py-3">
+                <Link to={`/customers/${customer.id}`} className="min-w-0 flex-1">
+                  <span className="block truncate text-sm text-charcoal hover:text-gold">{customer.name}</span>
+                  <span className="block truncate text-[0.6875rem] text-taupe">{customer.email}</span>
+                </Link>
+                <span className="shrink-0 text-[0.6875rem] text-taupe">{relativeTime(customer.createdAt)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
     </>
   )
 }

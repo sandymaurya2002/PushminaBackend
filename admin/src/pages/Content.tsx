@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowDown, ArrowUp, Image as ImageIcon, Pencil, Plus, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, Film, Image as ImageIcon, Pencil, Plus, Trash2, Upload } from 'lucide-react'
 import { api, ApiError } from '@/lib/api'
 import {
   Badge,
@@ -17,7 +17,7 @@ import {
   useToast,
 } from '@/components/ui'
 import { useAuth } from '@/lib/auth'
-import { cn, titleCase } from '@/lib/utils'
+import { cn, formatDateTime, titleCase } from '@/lib/utils'
 
 interface Banner {
   id: string
@@ -25,8 +25,13 @@ interface Banner {
   eyebrow: string | null
   heading: string
   subheading: string | null
+  mediaType: 'IMAGE' | 'VIDEO'
   imageUrl: string | null
+  mobileImageUrl: string | null
   imageAlt: string | null
+  videoUrl: string | null
+  previewUrl: string | null
+  videoPreviewUrl: string | null
   href: string | null
   ctaLabel: string | null
   secondaryHref: string | null
@@ -49,9 +54,15 @@ interface HomepageSection {
   isActive: boolean
 }
 
+interface UploadedAsset {
+  path: string
+  mimeType: string
+}
+
 const PLACEMENTS = [
   'HOME_HERO',
   'HOME_FEATURED',
+  'HOME_GIFT_PACKAGING',
   'HOME_GIFTING',
   'HOME_CATEGORY_CARD',
   'HOME_EDITORIAL',
@@ -66,14 +77,42 @@ const EMPTY_BANNER = {
   eyebrow: '',
   heading: '',
   subheading: '',
+  mediaType: 'IMAGE' as 'IMAGE' | 'VIDEO',
   imageUrl: '',
+  mobileImageUrl: '',
   imageAlt: '',
+  videoUrl: '',
   href: '',
   ctaLabel: '',
   secondaryHref: '',
   secondaryCtaLabel: '',
   sortOrder: 0,
   isActive: true,
+  startsAt: '',
+  endsAt: '',
+}
+
+type BannerForm = typeof EMPTY_BANNER
+type MediaField = 'imageUrl' | 'mobileImageUrl' | 'videoUrl'
+
+/** `<input type="datetime-local">` works in local time without a zone. */
+function toLocalInput(iso: string | null): string {
+  if (!iso) return ''
+  const date = new Date(iso)
+  const offset = date.getTimezoneOffset() * 60_000
+  return new Date(date.getTime() - offset).toISOString().slice(0, 16)
+}
+
+function fromLocalInput(value: string): string | null {
+  return value ? new Date(value).toISOString() : null
+}
+
+function scheduleLabel(banner: Banner): string | null {
+  const now = Date.now()
+  if (banner.startsAt && Date.parse(banner.startsAt) > now) return `Starts ${formatDateTime(banner.startsAt)}`
+  if (banner.endsAt && Date.parse(banner.endsAt) <= now) return 'Ended'
+  if (banner.endsAt) return `Until ${formatDateTime(banner.endsAt)}`
+  return null
 }
 
 export function Content() {
@@ -85,7 +124,16 @@ export function Content() {
   const [editing, setEditing] = useState<Banner | null>(null)
   const [creating, setCreating] = useState(false)
   const [deleting, setDeleting] = useState<Banner | null>(null)
-  const [form, setForm] = useState(EMPTY_BANNER)
+  const [form, setForm] = useState<BannerForm>(EMPTY_BANNER)
+  const [uploadTarget, setUploadTarget] = useState<MediaField>('imageUrl')
+  const fileInput = useRef<HTMLInputElement>(null)
+
+  const errorToast = (title: string) => (caught: unknown) =>
+    toast({
+      title,
+      description: caught instanceof ApiError ? caught.message : 'Unexpected error.',
+      tone: 'error',
+    })
 
   const banners = useQuery({
     queryKey: ['admin-banners'],
@@ -106,13 +154,17 @@ export function Content() {
         ...form,
         eyebrow: form.eyebrow || null,
         subheading: form.subheading || null,
-        imageUrl: form.imageUrl || null,
+        imageUrl: form.imageUrl ? api.mediaPath(form.imageUrl) : null,
+        mobileImageUrl: form.mobileImageUrl ? api.mediaPath(form.mobileImageUrl) : null,
+        videoUrl: form.mediaType === 'VIDEO' && form.videoUrl ? api.mediaPath(form.videoUrl) : null,
         imageAlt: form.imageAlt || null,
         href: form.href || null,
         ctaLabel: form.ctaLabel || null,
         secondaryHref: form.secondaryHref || null,
         secondaryCtaLabel: form.secondaryCtaLabel || null,
         sortOrder: Number(form.sortOrder),
+        startsAt: fromLocalInput(form.startsAt),
+        endsAt: fromLocalInput(form.endsAt),
       }
       return editing
         ? api.patch(`/admin/content/banners/${editing.id}`, body)
@@ -122,14 +174,16 @@ export function Content() {
       void queryClient.invalidateQueries({ queryKey: ['admin-banners'] })
       setCreating(false)
       setEditing(null)
-      toast({ title: editing ? 'Banner saved' : 'Banner created' })
+      toast({ title: editing ? 'Banner saved' : 'Banner created', description: 'The website updates within a minute.' })
     },
-    onError: (caught) =>
-      toast({
-        title: 'Could not save',
-        description: caught instanceof ApiError ? caught.message : 'Unexpected error.',
-        tone: 'error',
-      }),
+    onError: errorToast('Could not save'),
+  })
+
+  const toggleBanner = useMutation({
+    mutationFn: async (banner: Banner) =>
+      api.patch(`/admin/content/banners/${banner.id}`, { isActive: !banner.isActive }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['admin-banners'] }),
+    onError: errorToast('Could not update'),
   })
 
   const deleteBanner = useMutation({
@@ -139,6 +193,26 @@ export function Content() {
       setDeleting(null)
       toast({ title: 'Banner deleted' })
     },
+    onError: (caught) => {
+      setDeleting(null)
+      errorToast('Could not delete')(caught)
+    },
+  })
+
+  const upload = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData()
+      formData.append('files', file)
+      formData.append('folder', 'banners')
+      return api.upload<UploadedAsset[]>('/admin/media', formData)
+    },
+    onSuccess: (result) => {
+      const asset = result.data[0]
+      if (!asset) return
+      setForm((current) => ({ ...current, [uploadTarget]: asset.path }))
+      toast({ title: 'Uploaded', description: asset.path })
+    },
+    onError: errorToast('Upload failed'),
   })
 
   const toggleSection = useMutation({
@@ -147,6 +221,7 @@ export function Content() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin-homepage-sections'] })
     },
+    onError: errorToast('Could not update'),
   })
 
   const reorderSections = useMutation({
@@ -155,6 +230,7 @@ export function Content() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin-homepage-sections'] })
     },
+    onError: errorToast('Could not reorder'),
   })
 
   function moveSection(index: number, direction: -1 | 1) {
@@ -173,23 +249,60 @@ export function Content() {
       eyebrow: banner.eyebrow ?? '',
       heading: banner.heading,
       subheading: banner.subheading ?? '',
+      mediaType: banner.mediaType ?? 'IMAGE',
       imageUrl: banner.imageUrl ?? '',
+      mobileImageUrl: banner.mobileImageUrl ?? '',
       imageAlt: banner.imageAlt ?? '',
+      videoUrl: banner.videoUrl ?? '',
       href: banner.href ?? '',
       ctaLabel: banner.ctaLabel ?? '',
       secondaryHref: banner.secondaryHref ?? '',
       secondaryCtaLabel: banner.secondaryCtaLabel ?? '',
       sortOrder: banner.sortOrder,
       isActive: banner.isActive,
+      startsAt: toLocalInput(banner.startsAt),
+      endsAt: toLocalInput(banner.endsAt),
     })
     setEditing(banner)
   }
+
+  function pickFile(target: MediaField) {
+    setUploadTarget(target)
+    if (fileInput.current) {
+      fileInput.current.accept =
+        target === 'videoUrl' ? 'video/mp4,video/webm' : 'image/jpeg,image/png,image/webp,image/avif'
+      fileInput.current.click()
+    }
+  }
+
+  const mediaInput = (field: MediaField, id: string, placeholder: string) => (
+    <div className="flex gap-2">
+      <input
+        id={id}
+        value={form[field]}
+        onChange={(event) => setForm({ ...form, [field]: event.target.value })}
+        className="input flex-1"
+        placeholder={placeholder}
+      />
+      {can('media.upload') && (
+        <button
+          type="button"
+          onClick={() => pickFile(field)}
+          disabled={upload.isPending}
+          className="btn-outline btn-sm shrink-0"
+          aria-label="Upload a file"
+        >
+          {upload.isPending && uploadTarget === field ? <Spinner /> : <Upload className="h-3.5 w-3.5" strokeWidth={1.5} />}
+        </button>
+      )}
+    </div>
+  )
 
   return (
     <>
       <PageHeader
         title="Homepage & banners"
-        description="What appears on the homepage, in what order, and the imagery behind it."
+        description="What appears on the homepage, in what order, and the imagery or video behind it. Changes reach the website within a minute."
         actions={
           tab === 'banners' &&
           can('banners.create') && (
@@ -206,6 +319,17 @@ export function Content() {
             </button>
           )
         }
+      />
+
+      <input
+        ref={fileInput}
+        type="file"
+        className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0]
+          if (file) upload.mutate(file)
+          event.target.value = ''
+        }}
       />
 
       <div className="mb-6 flex gap-1 border-b border-line">
@@ -237,57 +361,71 @@ export function Content() {
             <EmptyState
               icon={<ImageIcon className="h-6 w-6" strokeWidth={1} />}
               title="No banners"
-              description="Add a hero, featured or gifting banner for the homepage."
+              description="Add a hero, featured or gifting banner. Until you do, the website shows its built-in imagery."
             />
           ) : (
             <ul className="divide-y divide-line">
-              {banners.data.map((banner) => (
-                <li key={banner.id} className="flex items-center gap-4 px-5 py-3.5">
-                  <div className="h-14 w-20 shrink-0 overflow-hidden bg-ivory-deep">
-                    {banner.imageUrl && (
-                      <img src={banner.imageUrl} alt="" className="h-full w-full object-cover" />
-                    )}
-                  </div>
-
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="truncate text-sm text-charcoal">{banner.heading}</p>
-                      <Badge className="border-line-strong text-taupe">
-                        {titleCase(banner.placement)}
-                      </Badge>
-                      {!banner.isActive && (
-                        <Badge className="border-line-strong text-taupe">Hidden</Badge>
+              {banners.data.map((banner) => {
+                const schedule = scheduleLabel(banner)
+                return (
+                  <li key={banner.id} className="flex items-center gap-4 px-5 py-3.5">
+                    <div className="relative h-14 w-20 shrink-0 overflow-hidden bg-ivory-deep">
+                      {banner.mediaType === 'VIDEO' && banner.videoPreviewUrl ? (
+                        <video src={banner.videoPreviewUrl} muted playsInline preload="metadata" className="h-full w-full object-cover" />
+                      ) : (
+                        banner.previewUrl && <img src={banner.previewUrl} alt="" className="h-full w-full object-cover" />
+                      )}
+                      {banner.mediaType === 'VIDEO' && (
+                        <Film className="absolute bottom-1 right-1 h-3.5 w-3.5 text-ivory drop-shadow" strokeWidth={1.5} />
                       )}
                     </div>
-                    {banner.subheading && (
-                      <p className="mt-0.5 truncate text-xs text-mocha">{banner.subheading}</p>
-                    )}
-                  </div>
 
-                  <div className="flex shrink-0 gap-1">
-                    {can('banners.update') && (
-                      <button
-                        type="button"
-                        onClick={() => openEdit(banner)}
-                        aria-label={`Edit ${banner.heading}`}
-                        className="p-1.5 text-taupe transition-colors hover:text-charcoal"
-                      >
-                        <Pencil className="h-3.5 w-3.5" strokeWidth={1.5} />
-                      </button>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="truncate text-sm text-charcoal">{banner.heading}</p>
+                        <Badge className="border-line-strong text-taupe">{titleCase(banner.placement)}</Badge>
+                        {schedule && <Badge className="border-gold/50 text-gold">{schedule}</Badge>}
+                      </div>
+                      {banner.subheading && (
+                        <p className="mt-0.5 truncate text-xs text-mocha">{banner.subheading}</p>
+                      )}
+                    </div>
+
+                    {can('banners.update') ? (
+                      <Toggle
+                        checked={banner.isActive}
+                        onChange={() => toggleBanner.mutate(banner)}
+                        label={banner.isActive ? 'Active' : 'Inactive'}
+                      />
+                    ) : (
+                      !banner.isActive && <Badge className="border-line-strong text-taupe">Inactive</Badge>
                     )}
-                    {can('banners.delete') && (
-                      <button
-                        type="button"
-                        onClick={() => setDeleting(banner)}
-                        aria-label={`Delete ${banner.heading}`}
-                        className="p-1.5 text-taupe transition-colors hover:text-burgundy"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" strokeWidth={1.5} />
-                      </button>
-                    )}
-                  </div>
-                </li>
-              ))}
+
+                    <div className="flex shrink-0 gap-1">
+                      {can('banners.update') && (
+                        <button
+                          type="button"
+                          onClick={() => openEdit(banner)}
+                          aria-label={`Edit ${banner.heading}`}
+                          className="p-1.5 text-taupe transition-colors hover:text-charcoal"
+                        >
+                          <Pencil className="h-3.5 w-3.5" strokeWidth={1.5} />
+                        </button>
+                      )}
+                      {can('banners.delete') && (
+                        <button
+                          type="button"
+                          onClick={() => setDeleting(banner)}
+                          aria-label={`Delete ${banner.heading}`}
+                          className="p-1.5 text-taupe transition-colors hover:text-burgundy"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" strokeWidth={1.5} />
+                        </button>
+                      )}
+                    </div>
+                  </li>
+                )
+              })}
             </ul>
           )}
         </Card>
@@ -373,7 +511,7 @@ export function Content() {
             <button
               type="button"
               onClick={() => saveBanner.mutate()}
-              disabled={saveBanner.isPending || !form.heading}
+              disabled={saveBanner.isPending || upload.isPending || !form.heading}
               className="btn-primary"
             >
               {saveBanner.isPending && <Spinner />}
@@ -383,7 +521,7 @@ export function Content() {
         }
       >
         <div className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-3">
             <Field label="Placement" htmlFor="b-placement" required>
               <select
                 id="b-placement"
@@ -396,6 +534,18 @@ export function Content() {
                     {titleCase(placement)}
                   </option>
                 ))}
+              </select>
+            </Field>
+
+            <Field label="Media" htmlFor="b-media">
+              <select
+                id="b-media"
+                value={form.mediaType}
+                onChange={(event) => setForm({ ...form, mediaType: event.target.value as 'IMAGE' | 'VIDEO' })}
+                className="input"
+              >
+                <option value="IMAGE">Image</option>
+                <option value="VIDEO">Video</option>
               </select>
             </Field>
 
@@ -438,26 +588,30 @@ export function Content() {
             />
           </Field>
 
+          {form.mediaType === 'VIDEO' && (
+            <Field label="Video" htmlFor="b-video" required hint="MP4 or WebM, up to 40 MB. Plays muted and looped; the image below is the poster.">
+              {mediaInput('videoUrl', 'b-video', '/media/videos/…')}
+            </Field>
+          )}
+
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Image URL" htmlFor="b-image">
-              <input
-                id="b-image"
-                value={form.imageUrl}
-                onChange={(event) => setForm({ ...form, imageUrl: event.target.value })}
-                className="input"
-                placeholder="/images/editorial/…"
-              />
+            <Field label={form.mediaType === 'VIDEO' ? 'Poster image' : 'Image'} htmlFor="b-image" hint="Upload, or a /images/… path or https:// URL.">
+              {mediaInput('imageUrl', 'b-image', '/images/editorial/…')}
             </Field>
 
-            <Field label="Image alt text" htmlFor="b-alt" hint="Required for accessibility.">
-              <input
-                id="b-alt"
-                value={form.imageAlt}
-                onChange={(event) => setForm({ ...form, imageAlt: event.target.value })}
-                className="input"
-              />
+            <Field label="Mobile image" htmlFor="b-mobile" hint="Optional portrait crop for phones.">
+              {mediaInput('mobileImageUrl', 'b-mobile', '/media/banners/…')}
             </Field>
           </div>
+
+          <Field label="Image alt text" htmlFor="b-alt" hint="Describes the image for screen readers.">
+            <input
+              id="b-alt"
+              value={form.imageAlt}
+              onChange={(event) => setForm({ ...form, imageAlt: event.target.value })}
+              className="input"
+            />
+          </Field>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Link" htmlFor="b-href">
@@ -501,10 +655,31 @@ export function Content() {
             </Field>
           </div>
 
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Show from" htmlFor="b-start" hint="Leave empty to show straight away.">
+              <input
+                id="b-start"
+                type="datetime-local"
+                value={form.startsAt}
+                onChange={(event) => setForm({ ...form, startsAt: event.target.value })}
+                className="input"
+              />
+            </Field>
+            <Field label="Show until" htmlFor="b-end" hint="Leave empty to keep it up.">
+              <input
+                id="b-end"
+                type="datetime-local"
+                value={form.endsAt}
+                onChange={(event) => setForm({ ...form, endsAt: event.target.value })}
+                className="input"
+              />
+            </Field>
+          </div>
+
           <Toggle
             checked={form.isActive}
             onChange={(next) => setForm({ ...form, isActive: next })}
-            label="Show on the website"
+            label="Active on the website"
           />
         </div>
       </Modal>
@@ -515,7 +690,7 @@ export function Content() {
         onConfirm={() => deleting && deleteBanner.mutate(deleting.id)}
         busy={deleteBanner.isPending}
         title="Delete this banner?"
-        message="It will be removed from the website immediately."
+        message="It will be removed from the website immediately. Uploaded files stay in the media library."
       />
     </>
   )

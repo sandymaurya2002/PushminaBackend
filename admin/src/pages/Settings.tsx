@@ -209,9 +209,9 @@ export function Settings() {
       </div>
 
       <p className="mt-6 text-xs leading-relaxed text-taupe">
-        Commerce values — the free-shipping threshold, GST rate and cash-on-delivery limit — are
-        applied by the checkout on the server. Changing them here changes what customers are
-        charged.
+        Commerce values — the free-shipping threshold, shipping fees, cash-on-delivery limit,
+        return window and online payment window — are applied by the checkout on the server.
+        Changing them here changes what customers are charged. Amounts are in rupees.
       </p>
     </>
   )

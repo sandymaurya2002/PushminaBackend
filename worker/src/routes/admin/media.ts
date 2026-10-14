@@ -5,7 +5,7 @@ import { badRequest, conflict, notFound } from "../../lib/errors";
 import { created, noContent, ok, paginated } from "../../lib/http";
 import { likePattern, newId, toIso } from "../../lib/util";
 import { body, query } from "../../lib/validation";
-import { MAX_DIMENSION, MAX_UPLOAD_BYTES, MEDIA_FOLDERS, sniffImage } from "../../media/images";
+import { MAX_DIMENSION, MAX_UPLOAD_BYTES, MAX_VIDEO_BYTES, MEDIA_FOLDERS, sniffImage, sniffVideo } from "../../media/images";
 import { can, currentUser } from "../../middleware/auth";
 import { rateLimit } from "../../middleware/rate-limit";
 import type { AppEnv } from "../../types";
@@ -27,6 +27,10 @@ interface MediaRow {
 }
 
 export const adminMediaRoutes = new Hono<AppEnv>();
+
+/** Where a stored file is referenced: product images and banner image/video slots. */
+const USAGE = `((SELECT COUNT(*) FROM product_images pi WHERE pi.media_id = m.id OR pi.url = '/media/' || m.object_key)
+  + (SELECT COUNT(*) FROM banners b WHERE '/media/' || m.object_key IN (COALESCE(b.image_url, ''), COALESCE(b.mobile_image_url, ''), COALESCE(b.video_url, ''))))`;
 
 function assetDto(row: MediaRow, resolve: (url: string) => string) {
   const path = `/media/${row.object_key}`;
@@ -76,8 +80,7 @@ adminMediaRoutes.get("/", can("media.view"), async (c) => {
   const [rows, total, folders] = await db.batch([
     db
       .prepare(
-        `SELECT m.*, (SELECT COUNT(*) FROM product_images pi WHERE pi.media_id = m.id) AS usage
-           FROM media_objects m ${clause} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+        `SELECT m.*, ${USAGE} AS usage FROM media_objects m ${clause} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
       )
       .bind(...binds, input.limit, (input.page - 1) * input.limit),
     db.prepare(`SELECT COUNT(*) AS n FROM media_objects ${clause}`).bind(...binds),
@@ -111,21 +114,30 @@ adminMediaRoutes.post("/", can("media.upload"), rateLimit({ name: "media-upload"
   const isPublic = String(form.get("public") ?? "true") !== "false";
 
   const files = [...form.getAll("files"), ...form.getAll("file")].filter((entry): entry is File => typeof entry !== "string");
-  if (!files.length) throw badRequest("Attach at least one image in the `files` field.");
+  if (!files.length) throw badRequest("Attach at least one image or video in the `files` field.");
   if (files.length > 10) throw badRequest("Upload at most 10 files at a time.");
 
   // Validate everything before writing anything.
   const prepared = [];
+  let videos = 0;
   for (const file of files) {
     if (file.size === 0) throw badRequest(`${file.name} is empty.`);
-    if (file.size > MAX_UPLOAD_BYTES) throw badRequest(`${file.name} is larger than ${MAX_UPLOAD_BYTES / 1024 / 1024} MB.`);
+    if (file.size > MAX_VIDEO_BYTES) throw badRequest(`${file.name} is larger than ${MAX_VIDEO_BYTES / 1024 / 1024} MB.`);
     const bytes = new Uint8Array(await file.arrayBuffer());
-    const sniffed = sniffImage(bytes);
-    if (!sniffed) throw badRequest(`${file.name} is not a supported image (JPEG, PNG, WebP, AVIF or GIF).`);
-    if ((sniffed.width ?? 0) > MAX_DIMENSION || (sniffed.height ?? 0) > MAX_DIMENSION) {
-      throw badRequest(`${file.name} is larger than ${MAX_DIMENSION}px on a side.`);
+    const image = sniffImage(bytes);
+    if (image) {
+      if (file.size > MAX_UPLOAD_BYTES) throw badRequest(`${file.name} is larger than ${MAX_UPLOAD_BYTES / 1024 / 1024} MB.`);
+      if ((image.width ?? 0) > MAX_DIMENSION || (image.height ?? 0) > MAX_DIMENSION) {
+        throw badRequest(`${file.name} is larger than ${MAX_DIMENSION}px on a side.`);
+      }
+      prepared.push({ file, bytes, sniffed: image, id: newId(), key: `${folderInput}/${crypto.randomUUID()}.${image.ext}` });
+      continue;
     }
-    prepared.push({ file, bytes, sniffed, id: newId(), key: `${folderInput}/${crypto.randomUUID()}.${sniffed.ext}` });
+    const video = sniffVideo(bytes);
+    if (!video) throw badRequest(`${file.name} is not a supported image (JPEG, PNG, WebP, AVIF, GIF) or video (MP4, WebM).`);
+    if ((videos += 1) > 1) throw badRequest("Upload one video at a time.");
+    const folder = folderInput === "products" || folderInput === "banners" ? folderInput : "videos";
+    prepared.push({ file, bytes, sniffed: { ...video, width: null, height: null }, id: newId(), key: `${folder}/${crypto.randomUUID()}.${video.ext}` });
   }
 
   const uploaded: string[] = [];
@@ -151,7 +163,7 @@ adminMediaRoutes.post("/", can("media.upload"), rateLimit({ name: "media-upload"
             entry.sniffed.mime,
             entry.bytes.byteLength,
             isPublic ? 1 : 0,
-            folderInput,
+            entry.key.split("/")[0],
             alt,
             entry.file.name.replace(/[^\w.\- ()]/g, "_").slice(0, 200),
             entry.sniffed.width,
@@ -191,11 +203,11 @@ adminMediaRoutes.patch("/:id", can("media.upload"), async (c) => {
 adminMediaRoutes.delete("/:id", can("media.delete"), async (c) => {
   const db = c.env.DB;
   const row = await db
-    .prepare(`SELECT m.*, (SELECT COUNT(*) FROM product_images pi WHERE pi.media_id = m.id OR pi.url = '/media/' || m.object_key) AS usage FROM media_objects m WHERE id = ?`)
+    .prepare(`SELECT m.*, ${USAGE} AS usage FROM media_objects m WHERE id = ?`)
     .bind(c.req.param("id"))
     .first<MediaRow>();
   if (!row) throw notFound("Media");
-  if ((row.usage ?? 0) > 0) throw conflict("MEDIA_IN_USE", `This image is used by ${row.usage} product image(s). Remove it from those products first.`);
+  if ((row.usage ?? 0) > 0) throw conflict("MEDIA_IN_USE", `This file is used in ${row.usage} place(s) (product images or banners). Remove it from those first.`);
   await db.prepare(`DELETE FROM media_objects WHERE id = ?`).bind(row.id).run();
   await c.env.MEDIA.delete(row.object_key);
   await audit(c, { action: "media.delete", entityType: "media", targetId: row.id, metadata: { key: row.object_key } });
