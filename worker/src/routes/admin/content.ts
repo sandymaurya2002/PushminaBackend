@@ -173,32 +173,69 @@ adminContentRoutes.get("/homepage-sections", can("content.view"), async (c) => {
   return ok(c, results.map(sectionDto));
 });
 
+const sectionItem = z.object({
+  key: optional(z.string().trim().max(40)),
+  eyebrow: optional(z.string().trim().max(80)),
+  heading: optional(z.string().trim().max(160)),
+  body: optional(z.string().trim().max(2000)),
+  imageUrl: optional(mediaUrl),
+  imageAlt: optional(z.string().trim().max(200)),
+  href: optional(link),
+  linkLabel: optional(z.string().trim().max(60)),
+});
+
 adminContentRoutes.patch("/homepage-sections/:id", can("content.update"), async (c) => {
   const input = await body(
     c,
     z.object({
       isActive: z.boolean().optional(),
-      heading: optional(z.string().trim().max(120)),
-      subheading: optional(z.string().trim().max(300)),
+      heading: optional(z.string().trim().max(160)),
+      subheading: optional(z.string().trim().max(600)),
+      eyebrow: optional(z.string().trim().max(80)),
+      body: optional(z.string().trim().max(2000)),
+      imageUrl: optional(mediaUrl),
+      imageAlt: optional(z.string().trim().max(200)),
       href: optional(link),
       linkLabel: optional(z.string().trim().max(60)),
+      secondaryHref: optional(link),
+      secondaryLinkLabel: optional(z.string().trim().max(60)),
+      items: z.array(sectionItem).max(12).optional(),
     }),
   );
   const existing = await c.env.DB.prepare(`SELECT * FROM homepage_sections WHERE id = ?`).bind(c.req.param("id")).first<SectionRow>();
   if (!existing) throw notFound("Section");
   const pick = <T>(value: T | undefined, current: T) => (value === undefined ? current : value);
+  const items =
+    input.items === undefined
+      ? existing.items_json ?? "[]"
+      : JSON.stringify(input.items.map((item) => Object.fromEntries(Object.entries(item).filter(([, value]) => value != null))));
+  const fields = Object.fromEntries(Object.entries(input).filter(([key]) => key !== "items"));
   await c.env.DB.batch([
     c.env.DB.prepare(
-      `UPDATE homepage_sections SET is_active = ?, heading = ?, subheading = ?, href = ?, link_label = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      `UPDATE homepage_sections SET is_active = ?, heading = ?, subheading = ?, eyebrow = ?, body = ?, image_url = ?, image_alt = ?, href = ?, link_label = ?,
+              secondary_href = ?, secondary_link_label = ?, items_json = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?`,
     ).bind(
       input.isActive === undefined ? existing.is_active : input.isActive ? 1 : 0,
       pick(input.heading, existing.heading),
       pick(input.subheading, existing.subheading),
+      pick(input.eyebrow, existing.eyebrow),
+      pick(input.body, existing.body),
+      pick(input.imageUrl, existing.image_url),
+      pick(input.imageAlt, existing.image_alt),
       pick(input.href, existing.href),
       pick(input.linkLabel, existing.link_label),
+      pick(input.secondaryHref, existing.secondary_href),
+      pick(input.secondaryLinkLabel, existing.secondary_link_label),
+      items,
       existing.id,
     ),
-    auditStatement(c, { action: "homepage.section.update", entityType: "homepage_section", targetId: existing.id, metadata: { key: existing.key, ...input } }),
+    auditStatement(c, {
+      action: "homepage.section.update",
+      entityType: "homepage_section",
+      targetId: existing.id,
+      metadata: { key: existing.key, ...fields, ...(input.items ? { itemCount: input.items.length } : {}) },
+    }),
   ]);
   const row = await c.env.DB.prepare(`SELECT * FROM homepage_sections WHERE id = ?`).bind(existing.id).first<SectionRow>();
   return ok(c, sectionDto(row!));

@@ -7,6 +7,7 @@ import {
   ChevronDown,
   CreditCard,
   FileText,
+  Film,
   Globe,
   Image,
   KeyRound,
@@ -80,7 +81,8 @@ const NAV: NavGroup[] = [
   {
     title: 'Website',
     entries: [
-      { label: 'Homepage & Banners', to: '/content', icon: LayoutTemplate, permission: 'banners.view' },
+      { label: 'Homepage', to: '/homepage', icon: LayoutTemplate, permission: 'content.view' },
+      { label: 'Banners', to: '/content', icon: Film, permission: 'banners.view' },
       { label: 'Pages', to: '/pages', icon: Globe, permission: 'content.view' },
       { label: 'SEO & Redirects', to: '/seo', icon: Search, permission: 'seo.view' },
       { label: 'Store Settings', to: '/settings', icon: Settings, permission: 'settings.view' },

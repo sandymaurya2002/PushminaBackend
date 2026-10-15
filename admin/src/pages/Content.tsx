@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowDown, ArrowUp, Film, Image as ImageIcon, Pencil, Plus, Trash2, Upload } from 'lucide-react'
+import { Film, Image as ImageIcon, Pencil, Plus, Trash2, Upload } from 'lucide-react'
 import { api, ApiError } from '@/lib/api'
 import {
   Badge,
@@ -17,7 +17,7 @@ import {
   useToast,
 } from '@/components/ui'
 import { useAuth } from '@/lib/auth'
-import { cn, formatDateTime, titleCase } from '@/lib/utils'
+import { formatDateTime, titleCase } from '@/lib/utils'
 
 interface Banner {
   id: string
@@ -40,18 +40,6 @@ interface Banner {
   isActive: boolean
   startsAt: string | null
   endsAt: string | null
-}
-
-interface HomepageSection {
-  id: string
-  key: string
-  type: string
-  heading: string | null
-  subheading: string | null
-  href: string | null
-  linkLabel: string | null
-  sortOrder: number
-  isActive: boolean
 }
 
 interface UploadedAsset {
@@ -116,7 +104,6 @@ function scheduleLabel(banner: Banner): string | null {
 }
 
 export function Content() {
-  const [tab, setTab] = useState<'banners' | 'sections'>('banners')
   const { can } = useAuth()
   const { toast } = useToast()
   const queryClient = useQueryClient()
@@ -138,14 +125,6 @@ export function Content() {
   const banners = useQuery({
     queryKey: ['admin-banners'],
     queryFn: async () => (await api.get<Banner[]>('/admin/content/banners')).data,
-    enabled: tab === 'banners',
-  })
-
-  const sections = useQuery({
-    queryKey: ['admin-homepage-sections'],
-    queryFn: async () =>
-      (await api.get<HomepageSection[]>('/admin/content/homepage-sections')).data,
-    enabled: tab === 'sections',
   })
 
   const saveBanner = useMutation({
@@ -215,34 +194,6 @@ export function Content() {
     onError: errorToast('Upload failed'),
   })
 
-  const toggleSection = useMutation({
-    mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) =>
-      api.patch(`/admin/content/homepage-sections/${id}`, { isActive }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['admin-homepage-sections'] })
-    },
-    onError: errorToast('Could not update'),
-  })
-
-  const reorderSections = useMutation({
-    mutationFn: async (ids: string[]) =>
-      api.post('/admin/content/homepage-sections/reorder', { ids }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['admin-homepage-sections'] })
-    },
-    onError: errorToast('Could not reorder'),
-  })
-
-  function moveSection(index: number, direction: -1 | 1) {
-    const list = sections.data
-    if (!list) return
-    const next = [...list]
-    const target = index + direction
-    if (target < 0 || target >= next.length) return
-    ;[next[index], next[target]] = [next[target], next[index]]
-    reorderSections.mutate(next.map((section) => section.id))
-  }
-
   function openEdit(banner: Banner) {
     setForm({
       placement: banner.placement,
@@ -301,10 +252,9 @@ export function Content() {
   return (
     <>
       <PageHeader
-        title="Homepage & banners"
-        description="What appears on the homepage, in what order, and the imagery or video behind it. Changes reach the website within a minute."
+        title="Banners"
+        description="Image or video banners. A banner placed on Home hero, Home featured, Home gift packaging or Home gifting replaces that homepage block's own design (edit those blocks under Website → Homepage). Changes reach the website within a minute."
         actions={
-          tab === 'banners' &&
           can('banners.create') && (
             <button
               type="button"
@@ -332,27 +282,7 @@ export function Content() {
         }}
       />
 
-      <div className="mb-6 flex gap-1 border-b border-line">
-        {(['banners', 'sections'] as const).map((entry) => (
-          <button
-            key={entry}
-            type="button"
-            onClick={() => setTab(entry)}
-            className={cn(
-              'relative px-4 py-2.5 text-[0.75rem] uppercase tracking-[0.12em] transition-colors',
-              tab === entry ? 'text-charcoal' : 'text-taupe hover:text-charcoal',
-            )}
-          >
-            {entry === 'banners' ? 'Banners' : 'Page sections'}
-            {tab === entry && (
-              <span className="absolute inset-x-0 -bottom-px h-0.5 bg-gold" aria-hidden />
-            )}
-          </button>
-        ))}
-      </div>
-
-      {tab === 'banners' ? (
-        <Card>
+      <Card>
           {banners.isLoading ? (
             <LoadingBlock rows={5} />
           ) : banners.error ? (
@@ -429,64 +359,6 @@ export function Content() {
             </ul>
           )}
         </Card>
-      ) : (
-        <Card>
-          {sections.isLoading ? (
-            <LoadingBlock rows={6} />
-          ) : sections.error ? (
-            <ErrorState error={sections.error} retry={() => void sections.refetch()} />
-          ) : (
-            <ul className="divide-y divide-line">
-              {sections.data?.map((section, index) => (
-                <li key={section.id} className="flex items-center gap-4 px-5 py-3.5">
-                  <span className="w-6 text-center font-serif text-lg text-taupe">
-                    {index + 1}
-                  </span>
-
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm text-charcoal">
-                      {section.heading ?? titleCase(section.key)}
-                    </p>
-                    <p className="text-[0.6875rem] text-taupe">
-                      {section.type}
-                      {section.subheading && ` · ${section.subheading}`}
-                    </p>
-                  </div>
-
-                  <Toggle
-                    checked={section.isActive}
-                    onChange={(next) =>
-                      toggleSection.mutate({ id: section.id, isActive: next })
-                    }
-                    label={section.isActive ? 'Shown' : 'Hidden'}
-                  />
-
-                  <div className="flex gap-1">
-                    <button
-                      type="button"
-                      onClick={() => moveSection(index, -1)}
-                      disabled={index === 0}
-                      aria-label="Move up"
-                      className="p-1.5 text-taupe transition-colors hover:text-charcoal disabled:opacity-30"
-                    >
-                      <ArrowUp className="h-3.5 w-3.5" strokeWidth={1.5} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => moveSection(index, 1)}
-                      disabled={index === (sections.data?.length ?? 0) - 1}
-                      aria-label="Move down"
-                      className="p-1.5 text-taupe transition-colors hover:text-charcoal disabled:opacity-30"
-                    >
-                      <ArrowDown className="h-3.5 w-3.5" strokeWidth={1.5} />
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-      )}
 
       <Modal
         open={creating || Boolean(editing)}

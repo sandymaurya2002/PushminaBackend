@@ -45,11 +45,33 @@ export interface SectionRow {
   type: string;
   heading: string | null;
   subheading: string | null;
+  /** Small line above the heading. Used by the editorial intro. */
+  eyebrow: string | null;
+  /** Second paragraph. The first paragraph is `subheading`. */
+  body: string | null;
+  image_url: string | null;
+  image_alt: string | null;
   href: string | null;
   link_label: string | null;
+  secondary_href: string | null;
+  secondary_link_label: string | null;
+  /** Repeated entries: heritage chapters, category cards, Instagram tiles, menu cards. */
+  items_json: string | null;
   sort_order: number;
   is_active: number;
   updated_at: string;
+}
+
+export interface SectionItem {
+  /** Identifies a fixed slot, e.g. the menu ("Men") a menu card belongs to. */
+  key?: string;
+  eyebrow?: string;
+  heading?: string;
+  body?: string;
+  imageUrl?: string;
+  imageAlt?: string;
+  href?: string;
+  linkLabel?: string;
 }
 
 export interface PageRow {
@@ -166,8 +188,15 @@ export function sectionDto(row: SectionRow) {
     type: row.type,
     heading: row.heading,
     subheading: row.subheading,
+    eyebrow: row.eyebrow ?? null,
+    body: row.body ?? null,
+    imageUrl: row.image_url ?? null,
+    imageAlt: row.image_alt ?? null,
     href: row.href,
     linkLabel: row.link_label,
+    secondaryHref: row.secondary_href ?? null,
+    secondaryLinkLabel: row.secondary_link_label ?? null,
+    items: parseJson<SectionItem[]>(row.items_json ?? "[]", []),
     sortOrder: row.sort_order,
     isActive: row.is_active === 1,
   };

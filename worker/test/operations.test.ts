@@ -407,6 +407,50 @@ describe("website content", () => {
     expect((await call("/api/v1/admin/orders", { token: editor.token })).status).toBe(403);
   });
 
+  it("publishes homepage block copy and list items edited in the admin", async () => {
+    const admin = await createAdmin();
+    const sections = await call("/api/v1/admin/content/homepage-sections", { token: admin.token });
+    const keys = sections.json.data.map((section: { key: string }) => section.key);
+    expect(keys).toEqual(expect.arrayContaining(["editorial-intro", "heritage-story", "gifting-banner", "menu-features"]));
+    const heritage = sections.json.data.find((section: { key: string }) => section.key === "heritage-story");
+    expect(heritage.items).toEqual([]);
+
+    const saved = await call(`/api/v1/admin/content/homepage-sections/${heritage.id}`, {
+      method: "PATCH",
+      token: admin.token,
+      body: {
+        eyebrow: "Heritage",
+        heading: "The Soul of Pashmore",
+        secondaryHref: "",
+        items: [
+          { eyebrow: "The Fibre", heading: "It begins at four thousand metres", body: "One.\n\nTwo.", imageUrl: "/images/editorial/editorial-kashmir.png", href: "" },
+          { heading: "Spun on a charkha", imageUrl: "/media/banners/x.png", href: "/craftsmanship", linkLabel: "Read more" },
+        ],
+      },
+    });
+    expect(saved.status).toBe(200);
+    expect(saved.json.data.secondaryHref).toBeNull();
+    expect(saved.json.data.items[0]).toEqual({ eyebrow: "The Fibre", heading: "It begins at four thousand metres", body: "One.\n\nTwo.", imageUrl: "/images/editorial/editorial-kashmir.png" });
+
+    const home = await call("/api/v1/content/home");
+    const published = home.json.data.sections.find((section: { key: string }) => section.key === "heritage-story");
+    expect(published.heading).toBe("The Soul of Pashmore");
+    expect(published.items).toHaveLength(2);
+    expect(published.items[1].href).toBe("/craftsmanship");
+
+    const toggled = await call(`/api/v1/admin/content/homepage-sections/${heritage.id}`, { method: "PATCH", token: admin.token, body: { isActive: false } });
+    expect(toggled.json.data.items).toHaveLength(2);
+    expect(toggled.json.data.isActive).toBe(false);
+
+    const badLink = await call(`/api/v1/admin/content/homepage-sections/${heritage.id}`, {
+      method: "PATCH",
+      token: admin.token,
+      body: { items: [{ heading: "x", href: "javascript:alert(1)" }] },
+    });
+    expect(badLink.status).toBe(422);
+    await call(`/api/v1/admin/content/homepage-sections/${heritage.id}`, { method: "PATCH", token: admin.token, body: { isActive: true, eyebrow: null, heading: heritage.heading, items: [] } });
+  });
+
   it("stores contact enquiries and newsletter sign-ups for the admin", async () => {
     const email = `visitor.${Date.now()}@example.com`;
     const short = await call("/api/v1/contact", { body: { name: "Riya", email, subject: "Order enquiry", message: "Too short" } });

@@ -36,6 +36,7 @@ const Payments = lazy(() => import('@/pages/Payments').then((m) => ({ default: m
 const Refunds = lazy(() => import('@/pages/Refunds').then((m) => ({ default: m.Refunds })))
 const Coupons = lazy(() => import('@/pages/Coupons').then((m) => ({ default: m.Coupons })))
 const Content = lazy(() => import('@/pages/Content').then((m) => ({ default: m.Content })))
+const Homepage = lazy(() => import('@/pages/Homepage').then((m) => ({ default: m.Homepage })))
 const Pages = lazy(() => import('@/pages/Pages').then((m) => ({ default: m.Pages })))
 const Seo = lazy(() => import('@/pages/Seo').then((m) => ({ default: m.Seo })))
 const Settings = lazy(() => import('@/pages/Settings').then((m) => ({ default: m.Settings })))
@@ -53,6 +54,7 @@ const GUARDED_SCREENS: Array<{ path: string; permission: string; element: ReactN
   { path: '/payments', permission: 'payments.view', element: <Payments /> },
   { path: '/refunds', permission: 'refunds.view', element: <Refunds /> },
   { path: '/coupons', permission: 'discounts.view', element: <Coupons /> },
+  { path: '/homepage', permission: 'content.view', element: <Homepage /> },
   { path: '/content', permission: 'banners.view', element: <Content /> },
   { path: '/pages', permission: 'content.view', element: <Pages /> },
   { path: '/seo', permission: 'seo.view', element: <Seo /> },
