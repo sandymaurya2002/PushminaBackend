@@ -71,7 +71,7 @@ signed webhook or a server-side fetch of the payment from Razorpay.
 | GET | `/search?q=` | Quick search. |
 | GET | `/content/site` | Announcement bar, contact details, social links, shipping and checkout rules. `commerce` holds the India (INR) rules; `commerceByCurrency.INR` / `.USD` hold each region's free-shipping threshold, fees and COD limit (always `0` for USD). |
 | GET | `/content/home` | Homepage sections and active banners. |
-| GET | `/content/banners` | Active banners (image or video), filterable by `placement`. |
+| GET | `/content/banners` | Active banners (image or video), filterable by `placement`. `PAGE_BANNER` banners carry a `pagePath`: `*` (every page), an exact path, or a section such as `/collections/*`. |
 | GET | `/content/pages/:slug` | Published CMS page (shipping, returns, privacy, terms, …). |
 | GET | `/content/seo` | Per-path SEO overrides. |
 | GET | `/content/redirects` | Active redirects; the storefront middleware applies them. |

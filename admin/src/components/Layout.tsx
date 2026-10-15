@@ -7,7 +7,6 @@ import {
   ChevronDown,
   CreditCard,
   FileText,
-  Film,
   Globe,
   Image,
   KeyRound,
@@ -54,7 +53,10 @@ interface NavGroup {
 const NAV: NavGroup[] = [
   {
     title: 'Overview',
-    entries: [{ label: 'Dashboard', to: '/', icon: LayoutDashboard, permission: 'dashboard.view' }],
+    entries: [
+      { label: 'Dashboard', to: '/', icon: LayoutDashboard, permission: 'dashboard.view' },
+      { label: 'Banners', to: '/content', icon: LayoutTemplate, permission: 'banners.view' },
+    ],
   },
   {
     title: 'Catalogue',
@@ -82,7 +84,6 @@ const NAV: NavGroup[] = [
     title: 'Website',
     entries: [
       { label: 'Homepage', to: '/homepage', icon: LayoutTemplate, permission: 'content.view' },
-      { label: 'Banners', to: '/content', icon: Film, permission: 'banners.view' },
       { label: 'Pages', to: '/pages', icon: Globe, permission: 'content.view' },
       { label: 'SEO & Redirects', to: '/seo', icon: Search, permission: 'seo.view' },
       { label: 'Store Settings', to: '/settings', icon: Settings, permission: 'settings.view' },

@@ -51,7 +51,7 @@ export const REQUIRED_COLUMNS: Record<string, string[]> = {
   contact_submissions: ["id", "email", "subject", "message", "status"],
   newsletter_subscribers: ["id", "email", "status"],
   site_settings: ["key", "value_json"],
-  banners: ["id", "placement", "heading", "media_type", "image_url", "video_url", "is_active", "starts_at", "ends_at"],
+  banners: ["id", "placement", "heading", "media_type", "image_url", "video_url", "is_active", "starts_at", "ends_at", "page_path"],
   homepage_sections: ["id", "key", "type", "heading", "subheading", "eyebrow", "body", "image_url", "image_alt", "href", "link_label", "secondary_href", "secondary_link_label", "items_json", "sort_order", "is_active"],
   content_pages: ["id", "slug", "title", "sections_json", "status"],
   seo_entries: ["id", "path", "title", "robots_index"],

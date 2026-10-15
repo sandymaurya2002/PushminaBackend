@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { isSettingKey, loadSettings, SETTINGS } from "../../content/settings";
-import { bannerDto, BANNER_PLACEMENTS, pageDto, sectionDto, type BannerRow, type PageRow, type SectionRow } from "../../content/site";
+import { bannerDto, BANNER_PLACEMENTS, normalizePath, PAGE_BANNER, pageDto, sectionDto, type BannerRow, type PageRow, type SectionRow } from "../../content/site";
 import { auditStatement } from "../../lib/audit";
 import { conflict, isUniqueViolation, notFound, validationError } from "../../lib/errors";
 import { created, noContent, ok } from "../../lib/http";
@@ -29,6 +29,20 @@ const isoDate = z
   .refine((value) => !Number.isNaN(Date.parse(value)), "Enter a valid date.")
   .transform((value) => new Date(value).toISOString());
 const optional = <T extends z.ZodTypeAny>(schema: T) => z.preprocess((value) => (value === "" ? null : value), schema.nullable().optional());
+/** "*" (every page), an exact path ("/about") or a section wildcard ("/collections/*"). */
+const pagePath = z
+  .string()
+  .trim()
+  .max(300)
+  .refine((value) => value === "*" || /^\/[^\s?#]*$/.test(value), "Use * for every page, or a path starting with / such as /about or /collections/*.")
+  .transform((value) => {
+    if (value === "*") return value;
+    if (value.endsWith("/*")) {
+      const base = normalizePath(value.slice(0, -2));
+      return base === "/" ? "*" : `${base}/*`;
+    }
+    return normalizePath(value);
+  });
 
 const bannerSchema = z
   .object({
@@ -49,8 +63,10 @@ const bannerSchema = z
     isActive: z.boolean().default(true),
     startsAt: optional(isoDate),
     endsAt: optional(isoDate),
+    pagePath: optional(pagePath),
   })
   .superRefine((value, ctx) => {
+    if (value.placement === PAGE_BANNER && !value.pagePath) ctx.addIssue({ code: "custom", path: ["pagePath"], message: "Choose the page this banner appears on." });
     if (value.mediaType === "VIDEO" && !value.videoUrl) ctx.addIssue({ code: "custom", path: ["videoUrl"], message: "Choose a video for a video banner." });
     if (value.startsAt && value.endsAt && value.endsAt <= value.startsAt) ctx.addIssue({ code: "custom", path: ["endsAt"], message: "The end must be after the start." });
   });
@@ -87,6 +103,7 @@ function bannerValues(input: BannerInput) {
     input.isActive ? 1 : 0,
     input.startsAt ?? null,
     input.endsAt ?? null,
+    input.placement === PAGE_BANNER ? (input.pagePath ?? null) : null,
   ];
 }
 
@@ -106,8 +123,8 @@ adminContentRoutes.post("/banners", can("banners.create"), async (c) => {
   await c.env.DB.batch([
     c.env.DB.prepare(
       `INSERT INTO banners (placement, eyebrow, heading, subheading, media_type, image_url, mobile_image_url, image_alt, video_url, href, cta_label,
-                            secondary_href, secondary_cta_label, sort_order, is_active, starts_at, ends_at, id, updated_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                            secondary_href, secondary_cta_label, sort_order, is_active, starts_at, ends_at, page_path, id, updated_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).bind(...bannerValues(input), bannerId, c.get("auth")!.userId),
     auditStatement(c, { action: "banner.create", entityType: "banner", targetId: bannerId, metadata: { placement: input.placement, heading: input.heading } }),
   ]);
@@ -138,6 +155,7 @@ adminContentRoutes.patch("/banners/:id", can("banners.update"), async (c) => {
     isActive: existing.is_active === 1,
     startsAt: existing.starts_at,
     endsAt: existing.ends_at,
+    pagePath: existing.page_path,
     ...(raw && typeof raw === "object" ? raw : {}),
   };
   const parsed = bannerSchema.safeParse(merged);
@@ -148,7 +166,7 @@ adminContentRoutes.patch("/banners/:id", can("banners.update"), async (c) => {
     c.env.DB.prepare(
       `UPDATE banners SET placement = ?, eyebrow = ?, heading = ?, subheading = ?, media_type = ?, image_url = ?, mobile_image_url = ?, image_alt = ?, video_url = ?,
               href = ?, cta_label = ?, secondary_href = ?, secondary_cta_label = ?, sort_order = ?, is_active = ?, starts_at = ?, ends_at = ?,
-              updated_by = ?, updated_at = CURRENT_TIMESTAMP
+              page_path = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?`,
     ).bind(...bannerValues(parsed.data), c.get("auth")!.userId, existing.id),
     auditStatement(c, { action: "banner.update", entityType: "banner", targetId: existing.id, metadata: raw as Record<string, unknown> }),

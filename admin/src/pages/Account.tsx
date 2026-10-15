@@ -6,6 +6,15 @@ import { api, ApiError } from '@/lib/api'
 import { Card, Field, PageHeader, Spinner, useToast } from '@/components/ui'
 import { useAuth } from '@/lib/auth'
 
+/** Mirrors the API's rules for admin passwords. */
+const MIN_ADMIN_PASSWORD = 12
+
+function errorMessage(caught: unknown): string {
+  if (!(caught instanceof ApiError)) return 'Could not change your password.'
+  const detail = caught.details?.newPassword ?? caught.details?.currentPassword
+  return detail ?? caught.message
+}
+
 export function Account() {
   const { admin, signOut } = useAuth()
   const { toast } = useToast()
@@ -28,8 +37,7 @@ export function Account() {
       await signOut()
       navigate('/login', { replace: true })
     },
-    onError: (caught) =>
-      setError(caught instanceof ApiError ? caught.message : 'Could not change your password.'),
+    onError: (caught) => setError(errorMessage(caught)),
   })
 
   function onSubmit(event: React.FormEvent) {
@@ -40,8 +48,12 @@ export function Account() {
       setError('The new passwords do not match.')
       return
     }
-    if (newPassword.length < 8) {
-      setError('Use at least 8 characters.')
+    if (newPassword.length < MIN_ADMIN_PASSWORD) {
+      setError(`Admin passwords need at least ${MIN_ADMIN_PASSWORD} characters.`)
+      return
+    }
+    if (!/[A-Za-z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
+      setError('Include at least one letter and one number.')
       return
     }
     if (newPassword === currentPassword) {
@@ -99,7 +111,7 @@ export function Account() {
               label="New password"
               htmlFor="new"
               required
-              hint="At least 8 characters, including a letter and a number."
+              hint={`At least ${MIN_ADMIN_PASSWORD} characters, including a letter and a number.`}
             >
               <input
                 id="new"
