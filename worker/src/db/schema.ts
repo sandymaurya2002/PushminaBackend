@@ -1,6 +1,6 @@
 /**
  * Verifies at runtime that the bound D1 database has every table, column and
- * trigger this Worker relies on (i.e. migrations 0001 to 0004 are applied).
+ * trigger this Worker relies on (i.e. migrations 0001 to 0005 are applied).
  */
 export const REQUIRED_COLUMNS: Record<string, string[]> = {
   users: ["id", "email", "name", "password_hash", "password_salt", "role", "phone", "active", "first_name", "last_name", "accepts_marketing", "admin_role", "last_login_at", "deleted_at"],
@@ -51,7 +51,7 @@ export const REQUIRED_COLUMNS: Record<string, string[]> = {
   contact_submissions: ["id", "email", "subject", "message", "status"],
   newsletter_subscribers: ["id", "email", "status"],
   site_settings: ["key", "value_json"],
-  banners: ["id", "placement", "heading", "media_type", "image_url", "video_url", "is_active", "starts_at", "ends_at"],
+  banners: ["id", "placement", "heading", "media_type", "image_url", "video_url", "is_active", "starts_at", "ends_at", "page_path"],
   homepage_sections: ["id", "key", "type", "sort_order", "is_active"],
   content_pages: ["id", "slug", "title", "sections_json", "status"],
   seo_entries: ["id", "path", "title", "robots_index"],

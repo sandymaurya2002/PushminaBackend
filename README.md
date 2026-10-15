@@ -24,7 +24,7 @@ Three processes: the Worker (API, local D1 and R2), the admin dashboard and the 
 cd worker
 npm install
 cp .dev.vars.example .dev.vars          # then fill in the secrets, see below
-npm run db:migrate:local                # applies 0001–0004 to the local D1
+npm run db:migrate:local                # applies 0001–0005 to the local D1
 node scripts/seed-catalog.mjs --local   # products, collections, stock (once)
 node scripts/seed-content.mjs --local   # shipping/returns/privacy/terms pages (once)
 node scripts/bootstrap-admin.mjs --local --email you@example.com --name "Your Name"

@@ -14,7 +14,11 @@ export const BANNER_PLACEMENTS = [
   "COLLECTION_HEADER",
   "ANNOUNCEMENT",
   "PROMO_STRIP",
+  "PAGE_BANNER",
 ] as const;
+
+/** The placement whose banners target storefront pages by `page_path`. */
+export const PAGE_BANNER = "PAGE_BANNER";
 
 export interface BannerRow {
   id: string;
@@ -35,6 +39,7 @@ export interface BannerRow {
   is_active: number;
   starts_at: string | null;
   ends_at: string | null;
+  page_path: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -151,6 +156,7 @@ export function bannerDto(row: BannerRow, resolve: MediaResolver) {
     ctaLabel: row.cta_label,
     secondaryHref: row.secondary_href,
     secondaryCtaLabel: row.secondary_cta_label,
+    pagePath: row.page_path,
     sortOrder: row.sort_order,
     isActive: row.is_active === 1,
     startsAt: toIso(row.starts_at),

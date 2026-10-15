@@ -40,6 +40,7 @@ interface Banner {
   isActive: boolean
   startsAt: string | null
   endsAt: string | null
+  pagePath: string | null
 }
 
 interface HomepageSection {
@@ -59,7 +60,10 @@ interface UploadedAsset {
   mimeType: string
 }
 
+const PAGE_BANNER = 'PAGE_BANNER'
+
 const PLACEMENTS = [
+  PAGE_BANNER,
   'HOME_HERO',
   'HOME_FEATURED',
   'HOME_GIFT_PACKAGING',
@@ -72,8 +76,33 @@ const PLACEMENTS = [
   'PROMO_STRIP',
 ]
 
+/** Suggestions for a page banner's target; any other storefront path can be typed in. */
+const STOREFRONT_PAGES: Array<{ path: string; label: string }> = [
+  { path: '*', label: 'Every page' },
+  { path: '/collections/*', label: 'All collection pages' },
+  { path: '/products/*', label: 'All product pages' },
+  { path: '/blog/*', label: 'Journal' },
+  { path: '/collections', label: 'Collections' },
+  { path: '/about', label: 'About' },
+  { path: '/craftsmanship', label: 'Craftsmanship' },
+  { path: '/contact', label: 'Contact' },
+  { path: '/faqs', label: 'FAQs' },
+  { path: '/shipping', label: 'Shipping' },
+  { path: '/returns', label: 'Returns' },
+  { path: '/track-order', label: 'Track order' },
+  { path: '/search', label: 'Search' },
+  { path: '/wishlist', label: 'Wishlist' },
+  { path: '/privacy', label: 'Privacy policy' },
+  { path: '/terms', label: 'Terms' },
+]
+
+function pageLabel(path: string): string {
+  return STOREFRONT_PAGES.find((page) => page.path === path)?.label ?? path
+}
+
 const EMPTY_BANNER = {
-  placement: 'HOME_HERO',
+  placement: PAGE_BANNER,
+  pagePath: '*',
   eyebrow: '',
   heading: '',
   subheading: '',
@@ -165,6 +194,7 @@ export function Content() {
         sortOrder: Number(form.sortOrder),
         startsAt: fromLocalInput(form.startsAt),
         endsAt: fromLocalInput(form.endsAt),
+        pagePath: form.placement === PAGE_BANNER ? form.pagePath || null : null,
       }
       return editing
         ? api.patch(`/admin/content/banners/${editing.id}`, body)
@@ -246,6 +276,7 @@ export function Content() {
   function openEdit(banner: Banner) {
     setForm({
       placement: banner.placement,
+      pagePath: banner.pagePath ?? '*',
       eyebrow: banner.eyebrow ?? '',
       heading: banner.heading,
       subheading: banner.subheading ?? '',
@@ -301,8 +332,8 @@ export function Content() {
   return (
     <>
       <PageHeader
-        title="Homepage & banners"
-        description="What appears on the homepage, in what order, and the imagery or video behind it. Changes reach the website within a minute."
+        title="Banners"
+        description="Upload and change the banner on any page of the website, and choose what appears on the homepage and in what order. Changes reach the website within a minute."
         actions={
           tab === 'banners' &&
           can('banners.create') && (
@@ -361,7 +392,7 @@ export function Content() {
             <EmptyState
               icon={<ImageIcon className="h-6 w-6" strokeWidth={1} />}
               title="No banners"
-              description="Add a hero, featured or gifting banner. Until you do, the website shows its built-in imagery."
+              description="Add a page banner, or a homepage hero, featured or gifting banner. Until you do, the website shows its built-in imagery."
             />
           ) : (
             <ul className="divide-y divide-line">
@@ -384,6 +415,9 @@ export function Content() {
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="truncate text-sm text-charcoal">{banner.heading}</p>
                         <Badge className="border-line-strong text-taupe">{titleCase(banner.placement)}</Badge>
+                        {banner.placement === PAGE_BANNER && banner.pagePath && (
+                          <Badge className="border-line-strong text-charcoal">{pageLabel(banner.pagePath)}</Badge>
+                        )}
                         {schedule && <Badge className="border-gold/50 text-gold">{schedule}</Badge>}
                       </div>
                       {banner.subheading && (
@@ -511,7 +545,12 @@ export function Content() {
             <button
               type="button"
               onClick={() => saveBanner.mutate()}
-              disabled={saveBanner.isPending || upload.isPending || !form.heading}
+              disabled={
+                saveBanner.isPending ||
+                upload.isPending ||
+                !form.heading ||
+                (form.placement === PAGE_BANNER && !form.pagePath.trim())
+              }
               className="btn-primary"
             >
               {saveBanner.isPending && <Spinner />}
@@ -559,6 +598,31 @@ export function Content() {
               />
             </Field>
           </div>
+
+          {form.placement === PAGE_BANNER && (
+            <Field
+              label="Page"
+              htmlFor="b-page"
+              required
+              hint="Pick a page, or type any website path such as /collections/pure-pashmina. * shows it on every page; /collections/* covers a whole section. A banner for an exact page wins over a section or every-page banner."
+            >
+              <input
+                id="b-page"
+                list="b-page-options"
+                value={form.pagePath}
+                onChange={(event) => setForm({ ...form, pagePath: event.target.value })}
+                className="input"
+                placeholder="/about"
+              />
+              <datalist id="b-page-options">
+                {STOREFRONT_PAGES.map((page) => (
+                  <option key={page.path} value={page.path}>
+                    {page.label}
+                  </option>
+                ))}
+              </datalist>
+            </Field>
+          )}
 
           <Field label="Eyebrow" htmlFor="b-eyebrow" hint="Small uppercase line above the heading.">
             <input

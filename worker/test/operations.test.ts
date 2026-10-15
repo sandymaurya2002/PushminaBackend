@@ -407,6 +407,28 @@ describe("website content", () => {
     expect((await call("/api/v1/admin/orders", { token: editor.token })).status).toBe(403);
   });
 
+  it("targets page banners at a page, a section or every page", async () => {
+    const admin = await createAdmin();
+    const base = { placement: "PAGE_BANNER", imageUrl: "/images/hero.jpg", isActive: true };
+
+    const missing = await call("/api/v1/admin/content/banners", { token: admin.token, body: { ...base, heading: "No page" } });
+    expect(missing.status).toBe(422);
+    const invalid = await call("/api/v1/admin/content/banners", { token: admin.token, body: { ...base, heading: "Bad page", pagePath: "about us" } });
+    expect(invalid.status).toBe(422);
+
+    const about = await call("/api/v1/admin/content/banners", { token: admin.token, body: { ...base, heading: "About", pagePath: "/About/" } });
+    expect(about.status).toBe(201);
+    expect(about.json.data.pagePath).toBe("/about");
+    const section = await call("/api/v1/admin/content/banners", { token: admin.token, body: { ...base, heading: "Collections", pagePath: "/collections/*" } });
+    expect(section.json.data.pagePath).toBe("/collections/*");
+
+    const listed = await call("/api/v1/content/banners?placement=PAGE_BANNER");
+    expect(listed.json.data.map((entry: { pagePath: string }) => entry.pagePath)).toEqual(expect.arrayContaining(["/about", "/collections/*"]));
+
+    const moved = await call(`/api/v1/admin/content/banners/${about.json.data.id}`, { method: "PATCH", token: admin.token, body: { placement: "HOME_HERO" } });
+    expect(moved.json.data.pagePath).toBeNull();
+  });
+
   it("stores contact enquiries and newsletter sign-ups for the admin", async () => {
     const email = `visitor.${Date.now()}@example.com`;
     const short = await call("/api/v1/contact", { body: { name: "Riya", email, subject: "Order enquiry", message: "Too short" } });
