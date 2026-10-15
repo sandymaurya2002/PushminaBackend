@@ -340,7 +340,7 @@ export function Admins() {
                 create.isPending ||
                 !form.name ||
                 !form.email ||
-                form.password.length < 8 ||
+                form.password.length < 12 ||
                 !form.roleId
               }
               className="btn-primary"
@@ -375,7 +375,7 @@ export function Admins() {
             label="Password"
             htmlFor="a-password"
             required
-            hint="At least 8 characters, including a letter and a number."
+            hint="At least 12 characters, including a letter and a number."
           >
             <input
               id="a-password"
