@@ -2,7 +2,7 @@ import { Hono, type MiddlewareHandler } from "hono";
 import { ensureSchema } from "./db/schema";
 import { readConfig, type Env } from "./env";
 import { ApiError, notImplemented, serviceUnavailable } from "./lib/errors";
-import { revalidateAfterWrite } from "./lib/revalidate";
+import { revalidateAfterWrite, revalidateStorefront } from "./lib/revalidate";
 import { requireAdmin } from "./middleware/auth";
 import { requestContext } from "./middleware/context";
 import { cors } from "./middleware/cors";
@@ -88,6 +88,8 @@ api.route("/admin", admin);
 api.route("/auth", authRoutes);
 api.route("/cart", cartRoutes);
 api.route("/wishlist", wishlistRoutes);
+api.use("/orders/*", revalidateAfterWrite);
+api.use("/orders", revalidateAfterWrite);
 api.route("/orders", orderRoutes);
 api.route("/payments", paymentRoutes);
 api.route("/content", contentRoutes);
@@ -155,6 +157,7 @@ export async function expirePayments(env: Env, ctx: ExecutionContext): Promise<v
   const config = readConfig(env);
   const result = await expireUnpaidOrders({ db: env.DB, actorId: null, ip: null, userAgent: "cron", config, waitUntil: (promise) => ctx.waitUntil(promise) });
   if (result.checked) console.log(`[cron] payment expiry: checked=${result.checked} cancelled=${result.cancelled} paid=${result.paid}`);
+  if (result.cancelled) await revalidateStorefront(config, ["products"]);
 }
 
 // Not exported: the runtime treats every named export of the entry module as a handler.
