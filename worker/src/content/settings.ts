@@ -28,7 +28,7 @@ function define<T>(group: string, label: string, schema: z.ZodType<T>, value: T,
 export const SETTINGS = {
   "store.name": define("Store", "Store name", text(80).min(1), "Pashmore"),
   "store.tagline": define("Store", "Tagline", text(200), "Timeless Indian craftsmanship, woven for modern luxury."),
-  "store.supportEmail": define("Store", "Customer care email", z.string().trim().email().max(254), "care@pashmore.com"),
+  "store.supportEmail": define("Store", "Customer care email", z.string().trim().email().max(254), "hello@pashmore.com"),
   "store.supportPhone": define("Store", "Customer care phone", text(40), "+91 194 000 0000"),
   "store.whatsapp": define("Store", "WhatsApp number (digits with country code)", z.string().trim().regex(/^\d{0,15}$/), ""),
   "store.address": define("Store", "Workshop address", text(300), "Boulevard Road, Dal Gate, Srinagar, Jammu & Kashmir 190001"),
