@@ -1213,7 +1213,7 @@ export function ProductForm() {
           <Card title="Options & collections">
             <div className="space-y-5 p-5">
               <Field label="Colours" hint="Which swatches this product is available in.">
-                <div className="grid max-h-44 gap-1.5 overflow-y-auto border border-line-strong p-3 sm:grid-cols-2">
+                <div className="grid max-h-80 gap-1.5 overflow-y-auto border border-line-strong p-3 sm:grid-cols-2">
                   {taxonomy.data?.colors.map((colour) => (
                     <label key={colour.id} className="flex cursor-pointer items-center gap-2 text-sm">
                       <input

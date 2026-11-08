@@ -60,13 +60,13 @@ const TABS: Array<{ key: TabKey; label: string; endpoint: string; hint: string }
     key: 'materials',
     label: 'Materials',
     endpoint: '/admin/taxonomy/materials',
-    hint: 'Pure Pashmina, Cashmere, Fine Merino Wool and so on. Shown above the product name on every card.',
+    hint: 'Pure Pashmina, Semi Pashmina, Cashmere, wool and silk. Shown above the product name on every card.',
   },
   {
     key: 'patterns',
     label: 'Patterns',
     endpoint: '/admin/taxonomy/patterns',
-    hint: 'Sozni, Kani, Jamawar, Solid… the craft technique used as a filter facet.',
+    hint: 'Sozni, Kani, Solid, Checked, Striped… the craft or pattern used as a filter facet.',
   },
   {
     key: 'categories',

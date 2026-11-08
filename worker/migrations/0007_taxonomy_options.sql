@@ -1,0 +1,68 @@
+-- Extra materials, patterns and colours for the product form.
+-- INSERT OR IGNORE so a catalogue that already has one of these slugs is left as-is.
+-- IDs match the seed script (sha256 of pashmore-seed:term:<kind>:<slug>).
+
+INSERT OR IGNORE INTO taxonomy_terms (id, kind, slug, name, hex, sort_order, is_active) VALUES
+  ('4627658c-7265-d14e-e0a9-c731ac442b3f', 'material', 'semi-pashmina', 'Semi Pashmina', NULL, 7, 1),
+  ('beb1c3d0-2649-06a1-4ab6-bb2137c60c64', 'material', 'pashmina-wool', 'Pashmina Wool Blend', NULL, 8, 1),
+  ('00315144-2722-ebe3-6018-29dbf2189f84', 'material', 'wool-silk', 'Wool Silk', NULL, 9, 1),
+  ('59d49927-d8cb-7c64-c894-9775ed91edd6', 'material', 'cotton', 'Cotton', NULL, 10, 1),
+  ('68c0106b-844d-6566-1d7c-0fed5fa176e1', 'material', 'linen', 'Linen', NULL, 11, 1);
+
+INSERT OR IGNORE INTO taxonomy_terms (id, kind, slug, name, hex, sort_order, is_active) VALUES
+  ('6d950691-f1c9-fa3f-1ae1-33e7924c5dbb', 'pattern', 'checked', 'Checked', NULL, 9, 1),
+  ('c9edc7f7-57b0-680e-80af-e7185a4f9e31', 'pattern', 'striped', 'Striped', NULL, 10, 1),
+  ('43459fc1-2b58-0096-014c-2eefdff683fd', 'pattern', 'plaid', 'Plaid', NULL, 11, 1),
+  ('652f3151-4fdc-d66d-d11d-ab69580bd642', 'pattern', 'floral', 'Floral', NULL, 12, 1),
+  ('d4892854-e25b-2ab4-ec7b-48baf577ee0c', 'pattern', 'printed', 'Printed', NULL, 13, 1),
+  ('a53d119d-b43e-bbe1-afb7-dbfba7ebfc73', 'pattern', 'geometric', 'Geometric', NULL, 14, 1),
+  ('a7bc3cda-72d9-32bf-8a9b-2986e559ee03', 'pattern', 'border', 'Border', NULL, 15, 1);
+
+INSERT OR IGNORE INTO taxonomy_terms (id, kind, slug, name, hex, sort_order, is_active) VALUES
+  ('1fbbae21-d529-8e86-b7d8-38758ac90a66', 'color', 'white', 'White', '#FFFFFF', 18, 1),
+  ('8f325255-055d-33d3-458a-ef84fec70c45', 'color', 'off-white', 'Off White', '#F7F4EF', 19, 1),
+  ('e36516d0-2faf-69f3-3c6e-e0bc66b6f12c', 'color', 'black', 'Black', '#111111', 20, 1),
+  ('e5bded1f-3785-3d99-dcc2-a901abd2e2c3', 'color', 'grey', 'Grey', '#8A8A8A', 21, 1),
+  ('894f62ae-bd38-c999-13e4-99e1a71a238e', 'color', 'silver', 'Silver', '#C0C0C0', 22, 1),
+  ('edc76ac9-9a4a-e360-d098-751c6270400d', 'color', 'chocolate', 'Chocolate', '#3C2415', 23, 1),
+  ('f994ccf8-4c1f-61b4-7826-2646c2500068', 'color', 'tan', 'Tan', '#C4A574', 24, 1),
+  ('bde90940-45b5-f7e0-3eb5-8ad3db576797', 'color', 'nude', 'Nude', '#E3C7B3', 25, 1),
+  ('485948b2-5813-c54c-440f-5c00bc7b0a5b', 'color', 'navy', 'Navy', '#1B2A4A', 26, 1),
+  ('9d22104c-e495-88df-ae6e-3fad3771c367', 'color', 'royal-blue', 'Royal Blue', '#2B4C9B', 27, 1),
+  ('640267ba-d42b-f182-042c-39908487949b', 'color', 'blue', 'Blue', '#3A6EA5', 28, 1),
+  ('cd542de2-391b-1a90-96b0-d058f20adbc5', 'color', 'sky-blue', 'Sky Blue', '#87CEEB', 29, 1),
+  ('5f41a0ad-4d52-fc5b-1072-a2bebdc54237', 'color', 'teal', 'Teal', '#1F6F78', 30, 1),
+  ('104d930d-3076-95d1-5687-c858723070e5', 'color', 'turquoise', 'Turquoise', '#40B5AD', 31, 1),
+  ('a5cfe954-62db-9486-bdea-7340647affa2', 'color', 'indigo', 'Indigo', '#3F3D7A', 32, 1),
+  ('914aac4b-6142-56ee-863f-f695f9b909c8', 'color', 'red', 'Red', '#C0392B', 33, 1),
+  ('d5fdb75f-d6e6-b769-3b8b-ece040ebed4b', 'color', 'maroon', 'Maroon', '#6B1D2A', 34, 1),
+  ('8b18da14-d9be-208c-656b-60956477bcf6', 'color', 'wine', 'Wine', '#722F37', 35, 1),
+  ('ac38652b-5f28-afb5-09ba-450db8bac468', 'color', 'pink', 'Pink', '#E8A0B4', 36, 1),
+  ('edb9610e-80f7-f8e3-0d04-f04c85bd7732', 'color', 'blush', 'Blush', '#F3C6C6', 37, 1),
+  ('0eaabf33-9803-fbcb-0f66-eed5cc2d7e6c', 'color', 'hot-pink', 'Hot Pink', '#E45A8A', 38, 1),
+  ('5474abde-d3ad-0114-4b15-a0fe507f0b69', 'color', 'magenta', 'Magenta', '#C2185B', 39, 1),
+  ('b81599d9-4653-8f05-a343-d0cbd92f8325', 'color', 'green', 'Green', '#2E7D4F', 40, 1),
+  ('28a10dd2-d682-4aa1-3563-9356df3ced8d', 'color', 'mint', 'Mint', '#A8D5C2', 41, 1),
+  ('18af1dbc-df7c-e33d-8527-e5bfb306d1df', 'color', 'sage', 'Sage', '#9CAF88', 42, 1),
+  ('fefc1e4e-d3c5-5c48-fbe1-5f1b54abb5c7', 'color', 'forest-green', 'Forest Green', '#1B4332', 43, 1),
+  ('a78638f2-38be-6062-1f9d-c5c19a33a225', 'color', 'yellow', 'Yellow', '#E6C200', 44, 1),
+  ('8414712b-0ba3-e321-e449-8890a786f7dd', 'color', 'mustard', 'Mustard', '#C4A035', 45, 1),
+  ('698f0ae5-0fa5-a14e-33a4-309ef051feab', 'color', 'orange', 'Orange', '#E07A2F', 46, 1),
+  ('551527bf-9030-00a2-ef09-c12e4daca1a4', 'color', 'peach', 'Peach', '#F3C4A4', 47, 1),
+  ('07202342-95eb-31dc-98b3-17133a3313dd', 'color', 'coral', 'Coral', '#E07A6A', 48, 1),
+  ('0d4a4302-77df-32ec-0033-ee8a605febcb', 'color', 'rust', 'Rust', '#B85C38', 49, 1),
+  ('cf97a835-033c-bbb6-554e-0638da82802f', 'color', 'copper', 'Copper', '#B87333', 50, 1),
+  ('13a01693-9bfe-8014-1f9c-68f32d70054a', 'color', 'terracotta', 'Terracotta', '#C46B4A', 51, 1),
+  ('985b299f-4420-3bad-ec6d-59a74cba2aaa', 'color', 'purple', 'Purple', '#6B3FA0', 52, 1),
+  ('1315cf39-ed3e-c0f1-487f-e3bd363448ac', 'color', 'lavender', 'Lavender', '#C4B5D4', 53, 1),
+  ('3595c1b4-b506-1c4c-c6a4-d21d984104da', 'color', 'lilac', 'Lilac', '#C8A2C8', 54, 1),
+  ('91747d91-7d3a-829c-87d4-4041452d5722', 'color', 'plum', 'Plum', '#6A3A4E', 55, 1),
+  ('9d6b2843-994d-095e-aa0e-26e6157f1abb', 'color', 'violet', 'Violet', '#7B4B94', 56, 1),
+  ('f3df7d46-0be7-8f65-ba28-c0ded9ae80f1', 'color', 'champagne', 'Champagne', '#F7E7CE', 57, 1),
+  ('3eafafab-7b03-355c-a544-163e208cfa63', 'color', 'rose-gold', 'Rose Gold', '#B76E79', 58, 1),
+  ('a736e4e2-b5ed-95f9-5d7c-3b577f49925f', 'color', 'bronze', 'Bronze', '#8C6239', 59, 1),
+  ('b7bf7e10-5f11-9db9-ee16-51360533d1d3', 'color', 'khaki', 'Khaki', '#C3B091', 60, 1),
+  ('2de55fd1-a814-9eba-05b0-077d0230fe3c', 'color', 'aqua', 'Aqua', '#7FDBDA', 61, 1),
+  ('b8624955-bbf1-ba93-c078-91bf0d961840', 'color', 'lime', 'Lime', '#B5C94E', 62, 1),
+  ('9a4693c8-995d-cc9d-0b88-dbe8489cfb12', 'color', 'fuchsia', 'Fuchsia', '#C43B7A', 63, 1),
+  ('5888f6fb-94cf-e639-a100-15b61d41b365', 'color', 'multicolour', 'Multicolour', '#C47A4A', 64, 1);

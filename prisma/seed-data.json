@@ -91,6 +91,241 @@
         "name": "Antique Gold",
         "slug": "gold",
         "hex": "#B08D4F"
+      },
+      {
+        "name": "White",
+        "slug": "white",
+        "hex": "#FFFFFF"
+      },
+      {
+        "name": "Off White",
+        "slug": "off-white",
+        "hex": "#F7F4EF"
+      },
+      {
+        "name": "Black",
+        "slug": "black",
+        "hex": "#111111"
+      },
+      {
+        "name": "Grey",
+        "slug": "grey",
+        "hex": "#8A8A8A"
+      },
+      {
+        "name": "Silver",
+        "slug": "silver",
+        "hex": "#C0C0C0"
+      },
+      {
+        "name": "Chocolate",
+        "slug": "chocolate",
+        "hex": "#3C2415"
+      },
+      {
+        "name": "Tan",
+        "slug": "tan",
+        "hex": "#C4A574"
+      },
+      {
+        "name": "Nude",
+        "slug": "nude",
+        "hex": "#E3C7B3"
+      },
+      {
+        "name": "Navy",
+        "slug": "navy",
+        "hex": "#1B2A4A"
+      },
+      {
+        "name": "Royal Blue",
+        "slug": "royal-blue",
+        "hex": "#2B4C9B"
+      },
+      {
+        "name": "Blue",
+        "slug": "blue",
+        "hex": "#3A6EA5"
+      },
+      {
+        "name": "Sky Blue",
+        "slug": "sky-blue",
+        "hex": "#87CEEB"
+      },
+      {
+        "name": "Teal",
+        "slug": "teal",
+        "hex": "#1F6F78"
+      },
+      {
+        "name": "Turquoise",
+        "slug": "turquoise",
+        "hex": "#40B5AD"
+      },
+      {
+        "name": "Indigo",
+        "slug": "indigo",
+        "hex": "#3F3D7A"
+      },
+      {
+        "name": "Red",
+        "slug": "red",
+        "hex": "#C0392B"
+      },
+      {
+        "name": "Maroon",
+        "slug": "maroon",
+        "hex": "#6B1D2A"
+      },
+      {
+        "name": "Wine",
+        "slug": "wine",
+        "hex": "#722F37"
+      },
+      {
+        "name": "Pink",
+        "slug": "pink",
+        "hex": "#E8A0B4"
+      },
+      {
+        "name": "Blush",
+        "slug": "blush",
+        "hex": "#F3C6C6"
+      },
+      {
+        "name": "Hot Pink",
+        "slug": "hot-pink",
+        "hex": "#E45A8A"
+      },
+      {
+        "name": "Magenta",
+        "slug": "magenta",
+        "hex": "#C2185B"
+      },
+      {
+        "name": "Green",
+        "slug": "green",
+        "hex": "#2E7D4F"
+      },
+      {
+        "name": "Mint",
+        "slug": "mint",
+        "hex": "#A8D5C2"
+      },
+      {
+        "name": "Sage",
+        "slug": "sage",
+        "hex": "#9CAF88"
+      },
+      {
+        "name": "Forest Green",
+        "slug": "forest-green",
+        "hex": "#1B4332"
+      },
+      {
+        "name": "Yellow",
+        "slug": "yellow",
+        "hex": "#E6C200"
+      },
+      {
+        "name": "Mustard",
+        "slug": "mustard",
+        "hex": "#C4A035"
+      },
+      {
+        "name": "Orange",
+        "slug": "orange",
+        "hex": "#E07A2F"
+      },
+      {
+        "name": "Peach",
+        "slug": "peach",
+        "hex": "#F3C4A4"
+      },
+      {
+        "name": "Coral",
+        "slug": "coral",
+        "hex": "#E07A6A"
+      },
+      {
+        "name": "Rust",
+        "slug": "rust",
+        "hex": "#B85C38"
+      },
+      {
+        "name": "Copper",
+        "slug": "copper",
+        "hex": "#B87333"
+      },
+      {
+        "name": "Terracotta",
+        "slug": "terracotta",
+        "hex": "#C46B4A"
+      },
+      {
+        "name": "Purple",
+        "slug": "purple",
+        "hex": "#6B3FA0"
+      },
+      {
+        "name": "Lavender",
+        "slug": "lavender",
+        "hex": "#C4B5D4"
+      },
+      {
+        "name": "Lilac",
+        "slug": "lilac",
+        "hex": "#C8A2C8"
+      },
+      {
+        "name": "Plum",
+        "slug": "plum",
+        "hex": "#6A3A4E"
+      },
+      {
+        "name": "Violet",
+        "slug": "violet",
+        "hex": "#7B4B94"
+      },
+      {
+        "name": "Champagne",
+        "slug": "champagne",
+        "hex": "#F7E7CE"
+      },
+      {
+        "name": "Rose Gold",
+        "slug": "rose-gold",
+        "hex": "#B76E79"
+      },
+      {
+        "name": "Bronze",
+        "slug": "bronze",
+        "hex": "#8C6239"
+      },
+      {
+        "name": "Khaki",
+        "slug": "khaki",
+        "hex": "#C3B091"
+      },
+      {
+        "name": "Aqua",
+        "slug": "aqua",
+        "hex": "#7FDBDA"
+      },
+      {
+        "name": "Lime",
+        "slug": "lime",
+        "hex": "#B5C94E"
+      },
+      {
+        "name": "Fuchsia",
+        "slug": "fuchsia",
+        "hex": "#C43B7A"
+      },
+      {
+        "name": "Multicolour",
+        "slug": "multicolour",
+        "hex": "#C47A4A"
       }
     ],
     "sizes": [
@@ -173,6 +408,26 @@
       {
         "name": "Cotton Silk",
         "slug": "cotton-silk"
+      },
+      {
+        "name": "Semi Pashmina",
+        "slug": "semi-pashmina"
+      },
+      {
+        "name": "Pashmina Wool Blend",
+        "slug": "pashmina-wool"
+      },
+      {
+        "name": "Wool Silk",
+        "slug": "wool-silk"
+      },
+      {
+        "name": "Cotton",
+        "slug": "cotton"
+      },
+      {
+        "name": "Linen",
+        "slug": "linen"
       }
     ],
     "patterns": [
@@ -211,6 +466,34 @@
       {
         "name": "Chikankari",
         "slug": "chikankari"
+      },
+      {
+        "name": "Checked",
+        "slug": "checked"
+      },
+      {
+        "name": "Striped",
+        "slug": "striped"
+      },
+      {
+        "name": "Plaid",
+        "slug": "plaid"
+      },
+      {
+        "name": "Floral",
+        "slug": "floral"
+      },
+      {
+        "name": "Printed",
+        "slug": "printed"
+      },
+      {
+        "name": "Geometric",
+        "slug": "geometric"
+      },
+      {
+        "name": "Border",
+        "slug": "border"
       }
     ],
     "categories": [
