@@ -13,7 +13,7 @@ export interface Env {
   ADMIN_REFRESH_TOKEN_TTL_SECONDS?: string;
   /** Absolute base for media URLs; defaults to the request origin. */
   MEDIA_PUBLIC_BASE_URL?: string;
-  /** Shared secret a trusted gateway (the Render/Express proxy) sends to forward client IPs. */
+  /** Shared secret the storefront sends so the Worker can trust the shopper's forwarded IP. */
   GATEWAY_SECRET?: string;
 
   /** Razorpay credentials (secrets). Online payment is offered only when both keys are set. */

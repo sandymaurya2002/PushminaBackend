@@ -1,7 +1,7 @@
 try {
   process.loadEnvFile()
 } catch {
-  // No .env file: rely on the process environment (Render).
+  // No .env file: rely on the process environment.
 }
 
 function required(name: string): string {
@@ -33,7 +33,7 @@ export const env = {
   PORT: parsePort(process.env.PORT),
   WORKER_API_URL: parseUpstream(required('WORKER_API_URL')),
   GATEWAY_SECRET: gatewaySecret,
-  /** Reverse-proxy hops in front of this process (Render: 1). */
+  /** Reverse-proxy hops in front of this process. */
   TRUST_PROXY_HOPS: Number(process.env.TRUST_PROXY_HOPS ?? 1),
   UPSTREAM_TIMEOUT_MS: Number(process.env.UPSTREAM_TIMEOUT_MS ?? 30_000),
   MAX_BODY_BYTES: Number(process.env.MAX_BODY_MB ?? 25) * 1024 * 1024,

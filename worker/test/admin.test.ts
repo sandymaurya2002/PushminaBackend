@@ -169,11 +169,13 @@ describe("audit and dashboard", () => {
     expect(stats.json.data.PENDING).toBeGreaterThan(0);
   });
 
-  it("returns 501 for modules that are not migrated", async () => {
+  it("returns 501 for modules that are not migrated, and serves the journal", async () => {
     const admin = await createAdmin();
-    for (const path of ["/api/v1/admin/reviews", "/api/v1/admin/blog/posts", "/api/v1/admin/notifications"]) {
+    for (const path of ["/api/v1/admin/reviews", "/api/v1/admin/notifications"]) {
       expect((await call(path, { token: admin.token })).status).toBe(501);
     }
+    expect((await call("/api/v1/admin/blog/posts", { token: admin.token })).status).toBe(200);
+    expect((await call("/api/v1/admin/blog/categories", { token: admin.token })).status).toBe(200);
     for (const path of ["/api/v1/admin/coupons", "/api/v1/admin/content/banners", "/api/v1/admin/content/settings", "/api/v1/admin/seo", "/api/v1/admin/payments"]) {
       expect((await call(path, { token: admin.token })).status).toBe(200);
     }

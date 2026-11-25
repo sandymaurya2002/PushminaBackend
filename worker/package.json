@@ -17,7 +17,8 @@
     "db:schema:check": "node scripts/check-remote-schema.mjs",
     "admin:bootstrap": "node scripts/bootstrap-admin.mjs",
     "seed:catalog": "node scripts/seed-catalog.mjs",
-    "seed:content": "node scripts/seed-content.mjs"
+    "seed:content": "node scripts/seed-content.mjs",
+    "seed:journal": "node scripts/seed-journal.mjs"
   },
   "dependencies": {
     "hono": "^4.13.13",

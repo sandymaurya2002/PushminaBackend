@@ -2,7 +2,7 @@
   "name": "pushmina-backend",
   "version": "2.0.0",
   "private": true,
-  "description": "Pashmore: stateless Node gateway in front of the Cloudflare Worker API (worker/), plus the admin dashboard (admin/).",
+  "description": "Pashmore: Cloudflare Worker API (worker/), admin dashboard (admin/), and an optional local Node gateway.",
   "license": "UNLICENSED",
   "engines": {
     "node": "24.x"

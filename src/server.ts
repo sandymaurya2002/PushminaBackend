@@ -7,7 +7,7 @@ const onListening = () => {
   console.log(`Pashmore gateway listening on ${env.PORT}, forwarding to ${env.WORKER_API_URL}`)
 }
 
-// Render reaches the process through a proxy, so listen on every interface.
+// Listen on every interface so a local reverse proxy can reach the process.
 const server = app.listen(env.PORT, '0.0.0.0', onListening)
 
 let shuttingDown = false

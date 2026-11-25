@@ -4,7 +4,7 @@
 | --------- | -------------------------------------------------------------------------------------------- | ----------------------------------- |
 | `worker/` | The commerce API: Hono on Cloudflare Workers, D1 `pashmore-db`, private R2 `pashmore-media`. | Worker `pashmore-api`               |
 | `admin/`  | React/Vite admin dashboard.                                                                  | Cloudflare Pages `pashmore-admin`   |
-| `src/`    | Optional stateless Node gateway that forwards `/api`, `/media` and `/health` to the Worker.  | Render (optional)                   |
+| `src/`    | Optional local Node gateway that forwards `/api`, `/media` and `/health` to the Worker. Not hosted. | —                                   |
 
 The gateway has no database, sessions or business rules. Authentication, CORS, rate limiting and
 cookies are all handled by the Worker. `prisma/` holds the retired PostgreSQL schema and
@@ -196,7 +196,27 @@ whose payment window lapsed (after one last check with Razorpay).
 
 ### Deploying
 
-Nothing here runs automatically. Take a D1 backup first
+The API deploys from this Git repository through Cloudflare Workers Builds, not
+from Render, Azure, or GitHub Actions. The Worker name in `worker/wrangler.jsonc`
+is `pashmore-api`, which is the Worker already in the Cloudflare account. Admin
+stays a direct deploy to Cloudflare Pages project `pashmore-admin` and is not
+part of this Worker build.
+
+Connect the Git repository once, in the Cloudflare dashboard:
+Worker `pashmore-api` → **Settings** → **Builds** → **Connect**.
+
+| Setting | Value |
+| ------- | ----- |
+| Repository | `sandymaurya2002/PushminaBackend` |
+| Production branch | `main` |
+| Root directory | `worker` |
+| Build command | leave empty (Wrangler bundles the Worker) |
+| Deploy command | `npx wrangler deploy` |
+
+Leave preview builds off. This Wrangler config is bound to the live D1 database
+and the live R2 bucket, so a branch preview would read and write production data.
+
+Migrations are not part of that deploy. Take a D1 backup first
 (`npx wrangler d1 export pashmore-db --remote --output backup.sql`).
 
 ```bash
@@ -242,21 +262,16 @@ npm install
 npm run dev     # Vite proxies /api and /media to wrangler dev on :8787
 ```
 
-Production build and deploy:
-
-```bash
-cd admin
-$env:VITE_API_BASE_URL="https://pashmore-api.sandymaurya2002.workers.dev"   # PowerShell
-npm run build
-npx wrangler pages deploy dist --project-name pashmore-admin --branch main
-```
+A push to `main` deploys this folder. Cloudflare Pages project `pashmore-admin` is connected to `sandymaurya2002/PushminaBackend`, builds `admin/` with `npx vite build`, and publishes `dist`. The build uses `VITE_API_BASE_URL=https://pashmore-api.sandymaurya2002.workers.dev` and `VITE_STOREFRONT_URL=https://www.pashmore.com`. Preview branches are off.
 
 | Variable              | Purpose                                                     |
 | --------------------- | ----------------------------------------------------------- |
 | `VITE_API_BASE_URL`   | Worker origin. Empty in development (uses the Vite proxy). |
 | `VITE_STOREFRONT_URL` | "View store" links. Defaults to `https://www.pashmore.com`. |
 
-## Node gateway (optional)
+## Node gateway (local only)
+
+This process is not deployed. Production traffic goes straight to the Worker.
 
 ```bash
 npm install

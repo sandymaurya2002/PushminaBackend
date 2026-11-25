@@ -1,6 +1,6 @@
-# Build and test only. Deploys are not done from GitHub Actions:
-# worker/ goes to Cloudflare Workers, admin/ to Cloudflare Pages,
-# and the optional gateway at the repo root to Render.
+# Build and test only. Deploys are not done from GitHub Actions.
+# worker/ deploys from this Git repository through Cloudflare Workers Builds.
+# admin/ deploys directly to Cloudflare Pages. The root gateway is not hosted.
 
 name: CI
 

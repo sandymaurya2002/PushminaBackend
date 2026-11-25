@@ -1,5 +1,8 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
+  // Production deploys come from Cloudflare Workers Builds on
+  // sandymaurya2002/PushminaBackend, branch main, root directory worker.
+  // Deploy command: npx wrangler deploy. This name must match the Worker.
   "name": "pashmore-api",
   "account_id": "67f122c7c1dc42bc2b275ef9626129cb",
   "main": "src/index.ts",
