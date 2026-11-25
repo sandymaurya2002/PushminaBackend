@@ -4,7 +4,7 @@
 | --------- | -------------------------------------------------------------------------------------------- | ----------------------------------- |
 | `worker/` | The commerce API: Hono on Cloudflare Workers, D1 `pashmore-db`, private R2 `pashmore-media`. | Worker `pashmore-api`               |
 | `admin/`  | React/Vite admin dashboard.                                                                  | Cloudflare Pages `pashmore-admin`   |
-| `src/`    | Optional stateless Node gateway that forwards `/api`, `/media` and `/health` to the Worker.  | Render or Azure (only if still used) |
+| `src/`    | Optional stateless Node gateway that forwards `/api`, `/media` and `/health` to the Worker.  | Render (optional)                   |
 
 The gateway has no database, sessions or business rules. Authentication, CORS, rate limiting and
 cookies are all handled by the Worker. `prisma/` holds the retired PostgreSQL schema and

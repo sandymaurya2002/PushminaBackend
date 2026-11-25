@@ -1,7 +1,7 @@
 try {
   process.loadEnvFile()
 } catch {
-  // No .env file: rely on the process environment (Render, Azure).
+  // No .env file: rely on the process environment (Render).
 }
 
 function required(name: string): string {
@@ -19,10 +19,10 @@ function parseUpstream(raw: string): string {
   return url.origin + url.pathname.replace(/\/+$/, '')
 }
 
-function parsePort(raw: string | undefined): number | string {
+function parsePort(raw: string | undefined): number {
   if (!raw) return 5000
-  // iisnode passes a named pipe rather than a number.
-  return /^\d+$/.test(raw) ? Number(raw) : raw
+  if (!/^\d+$/.test(raw)) throw new Error('PORT must be a number')
+  return Number(raw)
 }
 
 const gatewaySecret = required('GATEWAY_SECRET')
@@ -33,7 +33,7 @@ export const env = {
   PORT: parsePort(process.env.PORT),
   WORKER_API_URL: parseUpstream(required('WORKER_API_URL')),
   GATEWAY_SECRET: gatewaySecret,
-  /** Reverse-proxy hops in front of this process (Render and Azure: 1). */
+  /** Reverse-proxy hops in front of this process (Render: 1). */
   TRUST_PROXY_HOPS: Number(process.env.TRUST_PROXY_HOPS ?? 1),
   UPSTREAM_TIMEOUT_MS: Number(process.env.UPSTREAM_TIMEOUT_MS ?? 30_000),
   MAX_BODY_BYTES: Number(process.env.MAX_BODY_MB ?? 25) * 1024 * 1024,

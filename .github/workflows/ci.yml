@@ -1,0 +1,79 @@
+# Build and test only. Deploys are not done from GitHub Actions:
+# worker/ goes to Cloudflare Workers, admin/ to Cloudflare Pages,
+# and the optional gateway at the repo root to Render.
+
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gateway:
+    name: Gateway
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install, build, and test
+        run: |
+          npm ci
+          npm run build
+          npm test
+
+  worker:
+    name: Worker API
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+
+      - name: Install, typecheck, and test
+        run: |
+          npm ci
+          npm run typecheck
+          npm test
+
+  admin:
+    name: Admin dashboard
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: admin
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          cache: npm
+          cache-dependency-path: admin/package-lock.json
+
+      - name: Install, typecheck, and build
+        run: |
+          npm ci
+          npm run typecheck
+          npm run build

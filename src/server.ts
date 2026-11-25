@@ -7,10 +7,8 @@ const onListening = () => {
   console.log(`Pashmore gateway listening on ${env.PORT}, forwarding to ${env.WORKER_API_URL}`)
 }
 
-// Render and Azure reach the process through a proxy, so a numeric port must
-// listen on every interface; an iisnode named pipe must be listened on with no host.
-const server =
-  typeof env.PORT === 'number' ? app.listen(env.PORT, '0.0.0.0', onListening) : app.listen(env.PORT, onListening)
+// Render reaches the process through a proxy, so listen on every interface.
+const server = app.listen(env.PORT, '0.0.0.0', onListening)
 
 let shuttingDown = false
 function shutdown(signal: string): void {
