@@ -6,13 +6,17 @@
  * through triggers, in the same transaction as the write. A request costs one
  * single-row read to compare versions; the full reload only happens after a
  * change, so admin edits still show up on the very next request.
+ *
+ * Cloudflare Workers isolate I/O to the request that started it. This cache
+ * therefore stores only fully resolved plain values — never a pending Promise
+ * that holds a D1 handle from another invocation.
  */
 const MAX_AGE_MS = 10 * 60 * 1000;
 
-interface Entry {
+interface Entry<T = unknown> {
   version: number;
   loadedAt: number;
-  value: Promise<unknown>;
+  value: T;
 }
 
 const entries = new Map<string, Entry>();
@@ -29,13 +33,17 @@ export async function versioned<T>(db: D1Database, key: CacheKey, slot: string, 
   const id = `${key}:${slot}`;
   const now = Date.now();
   const hit = entries.get(id);
-  if (hit && hit.version === version && now - hit.loadedAt < MAX_AGE_MS) return hit.value as Promise<T>;
+  if (hit && hit.version === version && now - hit.loadedAt < MAX_AGE_MS) {
+    return hit.value as T;
+  }
 
-  const value = load();
-  entries.set(id, { version, loadedAt: now, value });
-  value.catch(() => {
-    if (entries.get(id)?.value === value) entries.delete(id);
-  });
+  // Load inside this request. Do not publish a pending Promise into `entries`:
+  // another invocation awaiting it would reuse this request's D1 I/O.
+  const value = await load();
+  const still = await cacheVersion(db, key);
+  if (still === version) {
+    entries.set(id, { version, loadedAt: Date.now(), value });
+  }
   return value;
 }
 

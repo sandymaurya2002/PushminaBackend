@@ -28,7 +28,7 @@ export async function revalidateStorefront(config: Config, tags: string[]): Prom
 const TAGS_BY_PREFIX: Array<[RegExp, string[]]> = [
   [/^\/api\/v1\/admin\/(products|inventory|taxonomy|collections|content\/collections)(\/|$)/, ["catalog"]],
   [/^\/api\/v1\/admin\/orders(\/|$)/, ["catalog"]],
-  [/^\/api\/v1\/admin\/(content|seo)(\/|$)/, ["content"]],
+  [/^\/api\/v1\/admin\/(content|seo|blog)(\/|$)/, ["content"]],
   // Customer orders reserve and release stock, so "Out of Stock" must show without waiting for the cache.
   [/^\/api\/v1\/orders\/?$/, ["products"]],
   [/^\/api\/v1\/orders\/[^/]+\/cancel$/, ["products"]],

@@ -10,6 +10,7 @@ import { body, id, slug } from "../../lib/validation";
 import { can } from "../../middleware/auth";
 import type { AppEnv } from "../../types";
 import { resolverFor } from "../catalog";
+import { mountCraftsmanship } from "./craftsmanship";
 
 /** Site-relative paths ("/collections/x") or absolute https links. */
 const link = z
@@ -427,3 +428,5 @@ adminContentRoutes.delete("/pages/:id", can("content.update"), async (c) => {
   ]);
   return noContent(c);
 });
+
+mountCraftsmanship(adminContentRoutes);

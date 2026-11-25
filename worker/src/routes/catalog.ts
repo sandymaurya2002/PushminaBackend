@@ -17,20 +17,23 @@ function cachePublic(c: Context<AppEnv>) {
   c.header("Vary", "X-Client-Country, CF-IPCountry", { append: true });
 }
 
+/** Tighter than csvList's 50: crawler multi-filter URLs were exceeding Worker CPU. */
+const filterList = csvList.transform((values) => values.slice(0, 12));
+
 const listSchema = z.object({
-  page: z.coerce.number().int().min(1).max(1000).default(1),
+  page: z.coerce.number().int().min(1).max(200).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(24),
   sort: z.enum(SORTS).default("featured"),
   q: z.string().trim().max(80).optional(),
-  category: csvList,
-  color: csvList,
-  material: csvList,
-  size: csvList,
-  pattern: csvList,
-  collection: csvList,
-  availability: csvList,
-  minPrice: z.coerce.number().min(0).optional(),
-  maxPrice: z.coerce.number().min(0).optional(),
+  category: filterList,
+  color: filterList,
+  material: filterList,
+  size: filterList,
+  pattern: filterList,
+  collection: filterList,
+  availability: filterList,
+  minPrice: z.coerce.number().min(0).max(10_000_000).optional(),
+  maxPrice: z.coerce.number().min(0).max(10_000_000).optional(),
   facets: z.enum(["true", "false", "1", "0"]).optional(),
 });
 

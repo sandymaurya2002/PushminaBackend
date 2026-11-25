@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowDown, ArrowUp, ChevronLeft, Plus, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, ChevronLeft, Plus, Trash2, Upload } from 'lucide-react'
 import { api, ApiError } from '@/lib/api'
 import {
   Card,
@@ -13,7 +13,7 @@ import {
   useToast,
 } from '@/components/ui'
 import { useAuth } from '@/lib/auth'
-import { toSlug } from '@/lib/utils'
+import { mediaPreview, toSlug } from '@/lib/utils'
 
 /**
  * Article editor.
@@ -75,7 +75,7 @@ export function BlogForm() {
     slug: '',
     excerpt: '',
     categoryId: '',
-    authorName: 'Pushmina Editorial',
+    authorName: 'Pashmore Editorial',
     coverUrl: '',
     coverAlt: '',
     readingMinutes: 5,
@@ -84,6 +84,41 @@ export function BlogForm() {
   })
   const [blocks, setBlocks] = useState<Block[]>([{ type: 'paragraph', text: '' }])
   const [seeded, setSeeded] = useState(false)
+  const fileInput = useRef<HTMLInputElement>(null)
+  const [uploadTarget, setUploadTarget] = useState<'cover' | number | null>(null)
+
+  const upload = useMutation({
+    mutationFn: async (file: File) => {
+      const body = new FormData()
+      body.append('files', file)
+      body.append('folder', 'banners')
+      return api.upload<Array<{ path: string }>>('/admin/media', body)
+    },
+    onSuccess: (result) => {
+      const path = result.data[0]?.path
+      if (!path || uploadTarget === null) return
+      if (uploadTarget === 'cover') setForm((current) => ({ ...current, coverUrl: path }))
+      else {
+        setBlocks((current) =>
+          current.map((block, index) =>
+            index === uploadTarget && block.type === 'image' ? { ...block, url: path } : block,
+          ),
+        )
+      }
+      toast({ title: 'Image uploaded' })
+    },
+    onError: (caught) =>
+      toast({
+        title: 'Upload failed',
+        description: caught instanceof ApiError ? caught.message : 'Unexpected error.',
+        tone: 'error',
+      }),
+  })
+
+  function pickImage(target: 'cover' | number) {
+    setUploadTarget(target)
+    fileInput.current?.click()
+  }
 
   const categories = useQuery({
     queryKey: ['blog-categories'],
@@ -104,7 +139,7 @@ export function BlogForm() {
       slug: String(data.slug ?? ''),
       excerpt: String(data.excerpt ?? ''),
       categoryId: String(data.categoryId ?? ''),
-      authorName: String(data.authorName ?? 'Pushmina Editorial'),
+      authorName: String(data.authorName ?? 'Pashmore Editorial'),
       coverUrl: String(data.coverUrl ?? ''),
       coverAlt: String(data.coverAlt ?? ''),
       readingMinutes: Number(data.readingMinutes ?? 5),
@@ -123,9 +158,11 @@ export function BlogForm() {
         excerpt: form.excerpt,
         categoryId: form.categoryId,
         authorName: form.authorName,
-        coverUrl: form.coverUrl || null,
+        coverUrl: form.coverUrl ? api.mediaPath(form.coverUrl) : null,
         coverAlt: form.coverAlt || null,
-        blocks,
+        blocks: blocks.map((block) =>
+          block.type === 'image' ? { ...block, url: api.mediaPath(block.url) } : block,
+        ),
         readingMinutes: Number(form.readingMinutes),
         status: form.status,
         scheduledAt: form.status === 'SCHEDULED' && form.scheduledAt ? form.scheduledAt : null,
@@ -408,16 +445,36 @@ export function BlogForm() {
 
                   {block.type === 'image' && (
                     <div className="space-y-2">
-                      <input
-                        value={block.url}
-                        onChange={(event) =>
-                          updateBlock(index, { ...block, url: event.target.value })
-                        }
-                        className="input"
-                        placeholder="Image URL"
-                        disabled={readOnly}
-                        aria-label="Image URL"
-                      />
+                      {block.url && (
+                        <img src={mediaPreview(block.url)} alt="" className="aspect-[3/2] w-full object-cover" />
+                      )}
+                      <div className="flex gap-2">
+                        <input
+                          value={block.url}
+                          onChange={(event) =>
+                            updateBlock(index, { ...block, url: event.target.value })
+                          }
+                          className="input"
+                          placeholder="Image URL"
+                          disabled={readOnly}
+                          aria-label="Image URL"
+                        />
+                        {!readOnly && can('media.upload') && (
+                          <button
+                            type="button"
+                            onClick={() => pickImage(index)}
+                            disabled={upload.isPending}
+                            className="btn-outline btn-sm shrink-0"
+                            aria-label="Upload image"
+                          >
+                            {upload.isPending && uploadTarget === index ? (
+                              <Spinner />
+                            ) : (
+                              <Upload className="h-3.5 w-3.5" strokeWidth={1.5} />
+                            )}
+                          </button>
+                        )}
+                      </div>
                       <input
                         value={block.alt}
                         onChange={(event) =>
@@ -546,23 +603,52 @@ export function BlogForm() {
               {form.coverUrl && (
                 <div className="aspect-[3/2] overflow-hidden bg-ivory-deep">
                   <img
-                    src={form.coverUrl}
+                    src={mediaPreview(form.coverUrl)}
                     alt={form.coverAlt}
                     className="h-full w-full object-cover"
                   />
                 </div>
               )}
 
-              <Field label="Image URL" htmlFor="cover">
-                <input
-                  id="cover"
-                  value={form.coverUrl}
-                  onChange={(event) => setForm({ ...form, coverUrl: event.target.value })}
-                  className="input"
-                  placeholder="/images/blog/…"
-                  disabled={readOnly}
-                />
+              <Field label="Image" htmlFor="cover" hint="Upload a photograph, or paste a path the website already has.">
+                <div className="flex gap-2">
+                  <input
+                    id="cover"
+                    value={form.coverUrl}
+                    onChange={(event) => setForm({ ...form, coverUrl: event.target.value })}
+                    className="input"
+                    placeholder="/images/blog/…"
+                    disabled={readOnly}
+                  />
+                  {!readOnly && can('media.upload') && (
+                    <button
+                      type="button"
+                      onClick={() => pickImage('cover')}
+                      disabled={upload.isPending}
+                      className="btn-outline btn-sm shrink-0"
+                      aria-label="Upload cover image"
+                    >
+                      {upload.isPending && uploadTarget === 'cover' ? (
+                        <Spinner />
+                      ) : (
+                        <Upload className="h-3.5 w-3.5" strokeWidth={1.5} />
+                      )}
+                    </button>
+                  )}
+                </div>
               </Field>
+
+              <input
+                ref={fileInput}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/avif"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0]
+                  event.target.value = ''
+                  if (file) upload.mutate(file)
+                }}
+              />
 
               <Field label="Alt text" htmlFor="coverAlt" hint="Describes the image for screen readers and search engines.">
                 <input

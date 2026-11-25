@@ -1,6 +1,6 @@
 /**
  * Verifies at runtime that the bound D1 database has every table, column and
- * trigger this Worker relies on (i.e. migrations 0001 to 0006 are applied).
+ * trigger this Worker relies on (i.e. migrations 0001 to 0008 are applied).
  */
 export const REQUIRED_COLUMNS: Record<string, string[]> = {
   users: ["id", "email", "name", "password_hash", "password_salt", "role", "phone", "active", "first_name", "last_name", "accepts_marketing", "admin_role", "last_login_at", "deleted_at"],
@@ -54,6 +54,10 @@ export const REQUIRED_COLUMNS: Record<string, string[]> = {
   banners: ["id", "placement", "heading", "media_type", "image_url", "video_url", "is_active", "starts_at", "ends_at", "page_path"],
   homepage_sections: ["id", "key", "type", "heading", "subheading", "eyebrow", "body", "image_url", "image_alt", "href", "link_label", "secondary_href", "secondary_link_label", "items_json", "sort_order", "is_active"],
   content_pages: ["id", "slug", "title", "sections_json", "status"],
+  blog_categories: ["id", "slug", "name", "description", "sort_order", "is_active"],
+  blog_posts: ["id", "slug", "title", "excerpt", "category_id", "author_name", "cover_url", "cover_alt", "blocks_json", "faqs_json", "reading_minutes", "status", "published_at", "scheduled_at", "view_count"],
+  craftsmanship_pages: ["id", "eyebrow", "heading", "intro", "updated_at"],
+  craftsmanship_stages: ["id", "step", "heading", "duration", "body", "image_url", "image_alt", "sort_order"],
   seo_entries: ["id", "path", "title", "robots_index"],
   redirects: ["id", "from_path", "to_path", "status_code", "is_active"],
   cache_versions: ["key", "version"],
@@ -75,6 +79,8 @@ export const REQUIRED_TRIGGERS = [
   "cv_products_u",
   "cv_variants_u",
   "cv_banners_u",
+  "cv_blog_posts_u",
+  "cv_craft_stages_u",
 ];
 
 export interface SchemaReport {

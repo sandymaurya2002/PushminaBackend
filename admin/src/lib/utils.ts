@@ -147,6 +147,20 @@ export const PAYMENT_STATUS_TONE: Record<string, string> = {
   PARTIALLY_REFUNDED: 'border-burgundy/40 text-burgundy',
 }
 
+const STOREFRONT_URL = (import.meta.env.VITE_STOREFRONT_URL ?? 'https://www.pashmore.com').replace(/\/+$/, '')
+
+/** A stored media path as something an <img> on the admin origin can load. */
+export function mediaPreview(path: string | null | undefined): string {
+  const value = path?.trim() ?? ''
+  if (!value) return ''
+  if (value.startsWith('/images/') || value.startsWith('/videos/')) return `${STOREFRONT_URL}${value}`
+  if (value.startsWith('/media/')) {
+    const origin = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/+$/, '')
+    return origin ? `${origin}${value}` : value
+  }
+  return value
+}
+
 export const PRODUCT_STATUS_TONE: Record<string, string> = {
   DRAFT: 'border-line-strong text-taupe',
   PUBLISHED: 'border-success/40 text-success',

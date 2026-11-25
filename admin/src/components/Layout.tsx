@@ -8,7 +8,9 @@ import {
   CreditCard,
   FileText,
   Globe,
+  Hammer,
   Image,
+  Newspaper,
   KeyRound,
   LayoutDashboard,
   LayoutTemplate,
@@ -47,8 +49,7 @@ interface NavGroup {
 }
 
 /**
- * Only modules the Cloudflare API implements. Reviews, blog and notifications
- * are not migrated yet; their API routes answer 501.
+ * Reviews and notifications are not migrated yet; their API routes answer 501.
  */
 const NAV: NavGroup[] = [
   {
@@ -84,6 +85,8 @@ const NAV: NavGroup[] = [
     title: 'Website',
     entries: [
       { label: 'Homepage', to: '/homepage', icon: LayoutTemplate, permission: 'content.view' },
+      { label: 'Craftsmanship', to: '/craftsmanship', icon: Hammer, permission: 'content.view' },
+      { label: 'Journal', to: '/blog', icon: Newspaper, permission: 'blog.view' },
       { label: 'Pages', to: '/pages', icon: Globe, permission: 'content.view' },
       { label: 'SEO & Redirects', to: '/seo', icon: Search, permission: 'seo.view' },
       { label: 'Store Settings', to: '/settings', icon: Settings, permission: 'settings.view' },

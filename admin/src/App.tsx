@@ -37,6 +37,11 @@ const Refunds = lazy(() => import('@/pages/Refunds').then((m) => ({ default: m.R
 const Coupons = lazy(() => import('@/pages/Coupons').then((m) => ({ default: m.Coupons })))
 const Content = lazy(() => import('@/pages/Content').then((m) => ({ default: m.Content })))
 const Homepage = lazy(() => import('@/pages/Homepage').then((m) => ({ default: m.Homepage })))
+const Craftsmanship = lazy(() =>
+  import('@/pages/Craftsmanship').then((m) => ({ default: m.Craftsmanship })),
+)
+const Blog = lazy(() => import('@/pages/Blog').then((m) => ({ default: m.Blog })))
+const BlogForm = lazy(() => import('@/pages/BlogForm').then((m) => ({ default: m.BlogForm })))
 const Pages = lazy(() => import('@/pages/Pages').then((m) => ({ default: m.Pages })))
 const Seo = lazy(() => import('@/pages/Seo').then((m) => ({ default: m.Seo })))
 const Settings = lazy(() => import('@/pages/Settings').then((m) => ({ default: m.Settings })))
@@ -55,6 +60,7 @@ const GUARDED_SCREENS: Array<{ path: string; permission: string; element: ReactN
   { path: '/refunds', permission: 'refunds.view', element: <Refunds /> },
   { path: '/coupons', permission: 'discounts.view', element: <Coupons /> },
   { path: '/homepage', permission: 'content.view', element: <Homepage /> },
+  { path: '/craftsmanship', permission: 'content.view', element: <Craftsmanship /> },
   { path: '/content', permission: 'banners.view', element: <Content /> },
   { path: '/pages', permission: 'content.view', element: <Pages /> },
   { path: '/seo', permission: 'seo.view', element: <Seo /> },
@@ -107,7 +113,7 @@ function RequirePermission({
 }
 
 /** Screens from the Express admin whose APIs have not been migrated to Cloudflare yet. */
-const UNAVAILABLE_PATHS = ['/reviews', '/blog/*', '/blog', '/notifications']
+const UNAVAILABLE_PATHS = ['/reviews', '/notifications']
 
 function Unavailable() {
   return (
@@ -230,6 +236,30 @@ export function App() {
                   element={
                     <RequirePermission permission="media.view">
                       <Media />
+                    </RequirePermission>
+                  }
+                />
+                <Route
+                  path="/blog"
+                  element={
+                    <RequirePermission permission="blog.view">
+                      <Blog />
+                    </RequirePermission>
+                  }
+                />
+                <Route
+                  path="/blog/new"
+                  element={
+                    <RequirePermission permission="blog.create">
+                      <BlogForm />
+                    </RequirePermission>
+                  }
+                />
+                <Route
+                  path="/blog/:id"
+                  element={
+                    <RequirePermission permission="blog.view">
+                      <BlogForm />
                     </RequirePermission>
                   }
                 />

@@ -15,7 +15,7 @@ import {
 } from '@/components/ui'
 import { useToast } from '@/components/ui'
 import { useAuth } from '@/lib/auth'
-import { formatDate, PRODUCT_STATUS_TONE } from '@/lib/utils'
+import { formatDate, mediaPreview, PRODUCT_STATUS_TONE } from '@/lib/utils'
 
 interface PostRow {
   id: string
@@ -126,7 +126,7 @@ export function Blog() {
                 <li key={post.id} className="flex items-center gap-4 px-5 py-4">
                   <div className="h-16 w-24 shrink-0 overflow-hidden bg-ivory-deep">
                     {post.coverUrl && (
-                      <img src={post.coverUrl} alt="" className="h-full w-full object-cover" />
+                      <img src={mediaPreview(post.coverUrl)} alt="" className="h-full w-full object-cover" />
                     )}
                   </div>
 

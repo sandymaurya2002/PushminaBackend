@@ -11,6 +11,7 @@ import { expireUnpaidOrders } from "./payments/service";
 import { adminUserRoutes, adminAuditRoutes, adminRoleRoutes } from "./routes/admin/admins";
 import { adminAuthRoutes } from "./routes/admin/auth";
 import { adminCollectionRoutes } from "./routes/admin/collections";
+import { adminBlogRoutes } from "./routes/admin/blog";
 import { adminContentRoutes } from "./routes/admin/content";
 import { adminCustomerRoutes, adminLoginActivityRoutes } from "./routes/admin/customers";
 import { adminDashboardRoutes, adminInventoryRoutes, adminReportRoutes } from "./routes/admin/dashboard";
@@ -33,7 +34,7 @@ import { wishlistRoutes } from "./routes/wishlist";
 import type { AppEnv } from "./types";
 
 /** Admin modules from the Express app that have no D1 implementation yet. */
-const UNSUPPORTED_ADMIN_MODULES = ["reviews", "notifications", "blog"];
+const UNSUPPORTED_ADMIN_MODULES = ["reviews", "notifications"];
 
 const schemaGate: MiddlewareHandler<AppEnv> = async (c, next) => {
   const report = await ensureSchema(c.env.DB);
@@ -60,6 +61,7 @@ admin.route("/inventory", adminInventoryRoutes);
 admin.route("/taxonomy", adminTaxonomyRoutes);
 admin.route("/content/collections", adminCollectionRoutes);
 admin.route("/content", adminContentRoutes);
+admin.route("/blog", adminBlogRoutes);
 admin.route("/collections", adminCollectionRoutes);
 admin.route("/seo", adminSeoRoutes);
 admin.route("/media", adminMediaRoutes);
